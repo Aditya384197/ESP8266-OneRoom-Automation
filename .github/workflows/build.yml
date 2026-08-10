@@ -50,7 +50,7 @@ jobs:
 
       - name: Build firmware
         run: |
-          pio run -e nodemcuv2
+          pio run -e nodemcuv2 -v
 
 
       # ---------------------------------------------------
