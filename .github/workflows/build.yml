@@ -1,35 +1,96 @@
-name: Build ESP8266 firmware
+name: Build ESP8266 Firmware
 
 on:
   push:
-  pull_request:
+    branches:
+      - main
+      - master
+
   workflow_dispatch:
 
 jobs:
+
   build:
+
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout
+
+      # ---------------------------------------------------
+      # Checkout repository
+      # ---------------------------------------------------
+
+      - name: Checkout repository
         uses: actions/checkout@v4
+
+
+      # ---------------------------------------------------
+      # Setup Python
+      # ---------------------------------------------------
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
+          python-version: "3.x"
+
+
+      # ---------------------------------------------------
+      # Install PlatformIO
+      # ---------------------------------------------------
 
       - name: Install PlatformIO
-        run: python -m pip install --upgrade platformio
+        run: |
+          python -m pip install --upgrade pip
+          pip install platformio
+
+
+      # ---------------------------------------------------
+      # Build ESP8266 firmware
+      # ---------------------------------------------------
 
       - name: Build firmware
-        run: pio run -e nodemcuv2
+        run: |
+          pio run -e nodemcuv2
 
-      - name: Build filesystem image
-        run: pio run -e nodemcuv2 -t buildfs
+
+      # ---------------------------------------------------
+      # Verify generated files
+      # ---------------------------------------------------
+
+      - name: Verify build output
+        run: |
+          echo "===== Build directory ====="
+          ls -lah .pio/build/nodemcuv2/
+
+          echo "===== Firmware ====="
+          test -f .pio/build/nodemcuv2/firmware.bin
+
+          echo "===== LittleFS ====="
+          test -f .pio/build/nodemcuv2/littlefs.bin
+
+
+      # ---------------------------------------------------
+      # Prepare release artifacts
+      # ---------------------------------------------------
+
+      - name: Prepare artifacts
+        run: |
+          mkdir -p artifacts
+
+          cp .pio/build/nodemcuv2/firmware.bin \
+             artifacts/firmware.bin
+
+          cp .pio/build/nodemcuv2/littlefs.bin \
+             artifacts/littlefs.bin
+
+
+      # ---------------------------------------------------
+      # Upload firmware artifacts
+      # ---------------------------------------------------
 
       - name: Upload firmware artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: esp8266-one-room-automation
-          path: |
-            .pio/build/nodemcuv2/firmware.bin
-            .pio/build/nodemcuv2/littlefs.bin
+          name: ESP8266-OneRoom-Automation
+          path: artifacts/
+          if-no-files-found: error
