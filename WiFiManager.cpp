@@ -36,7 +36,9 @@ void WiFiController::startAP() {
 void WiFiController::connectSTA() {
   if (!_cfg) return;
 
-  if (_cfg->config().staSsid[0] == '\0') {
+  const DeviceConfig& config = _cfg->config();
+
+  if (config.staSsid[0] == '\0') {
     _lastAttempt = millis();
     return;
   }
@@ -44,9 +46,16 @@ void WiFiController::connectSTA() {
   WiFi.disconnect(false);
   yield();
 
+  /*
+   * Do not manually lock the STA to a channel here.
+   *
+   * WiFi.begin(ssid, password) allows the ESP8266
+   * station to discover the AP and follow its current
+   * channel when reconnecting.
+   */
   WiFi.begin(
-    _cfg->config().staSsid,
-    _cfg->config().staPassword
+    config.staSsid,
+    config.staPassword
   );
 
   _lastAttempt = millis();
@@ -91,9 +100,14 @@ void WiFiController::loop() {
     connectSTA();
 
     const unsigned long next =
-      _backoff < 60000UL ? _backoff * 2UL : 60000UL;
+      (_backoff < 60000UL)
+        ? (_backoff * 2UL)
+        : 60000UL;
 
-    _backoff = next > 60000UL ? 60000UL : next;
+    _backoff =
+      (next > 60000UL)
+        ? 60000UL
+        : next;
   }
 
   yield();
@@ -139,48 +153,111 @@ int32_t WiFiController::rssi() const {
 }
 
 bool WiFiController::scanNetworks(String& json) {
+  json = "[]";
+
+  /*
+   * Remove results from any previous scan.
+   */
   WiFi.scanDelete();
+  yield();
 
-  // Synchronous real RF scan. The second argument explicitly requests hidden SSIDs.\n  // WiFi.begin(ssid,password) below intentionally does not pin a channel: ESP8266\n  // will re-scan/follow the AP if the router changes channel.\n  const int count = WiFi.scanNetworks(false, true);
+  /*
+   * Real synchronous RF scan.
+   *
+   * Parameter 1:
+   *   false = synchronous scan
+   *
+   * Parameter 2:
+   *   true = show hidden networks
+   */
+  int scanCount = WiFi.scanNetworks(false, true);
 
-  if (count < 0) {
-    json = "[]";
+  if (scanCount < 0) {
+    WiFi.scanDelete();
     return false;
   }
 
-  json.reserve((size_t)count * 90U + 4U);
+  /*
+   * Keep memory usage controlled on ESP8266.
+   */
+  const int maxResults = 40;
+
+  if (scanCount > maxResults) {
+    scanCount = maxResults;
+  }
+
+  json.reserve(
+    (size_t)scanCount * 110U + 4U
+  );
+
   json = "[";
 
-  for (int i = 0; i < count; ++i) {
+  for (int i = 0; i < scanCount; ++i) {
+
     if (i > 0) {
       json += ",";
     }
 
     String ssid = WiFi.SSID(i);
 
-    // Minimal JSON escaping for SSID.
+    /*
+     * Empty SSID means the network is hidden.
+     */
+    const bool hidden =
+      (ssid.length() == 0);
+
+    /*
+     * Escape characters that could break JSON.
+     */
     ssid.replace("\\", "\\\\");
     ssid.replace("\"", "\\\"");
     ssid.replace("\r", "\\r");
     ssid.replace("\n", "\\n");
 
-    json += "{\"ssid\":\"";
+    const int32_t signal =
+      WiFi.RSSI(i);
+
+    const uint8_t channel =
+      WiFi.channel(i);
+
+    const bool secure =
+      (WiFi.encryptionType(i) != ENC_TYPE_NONE);
+
+    json += "{";
+
+    json += "\"ssid\":\"";
     json += ssid;
-    json += "\",\"rssi\":";
-    json += String(WiFi.RSSI(i));
-    json += ",\"channel\":";
-    json += String(WiFi.channel(i));
-    json += ",\"secure\":";
-    json += (WiFi.encryptionType(i) == ENC_TYPE_NONE)
-              ? "false"
-              : "true";
+    json += "\",";
+
+    json += "\"rssi\":";
+    json += String(signal);
+    json += ",";
+
+    json += "\"channel\":";
+    json += String(channel);
+    json += ",";
+
+    json += "\"secure\":";
+    json += secure ? "true" : "false";
+    json += ",";
+
+    json += "\"hidden\":";
+    json += hidden ? "true" : "false";
+
     json += "}";
 
+    /*
+     * Give the ESP8266 background time between entries.
+     */
     yield();
   }
 
   json += "]";
 
+  /*
+   * Free scan-result memory.
+   */
   WiFi.scanDelete();
+
   return true;
 }
