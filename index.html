@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#07101d">
+<meta name="color-scheme" content="dark">
+<title>Room Automation</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="ambient ambient-a"></div><div class="ambient ambient-b"></div>
+<main class="shell">
+<header class="topbar">
+  <div class="brand"><div class="brand-mark">RA</div><div><div class="eyebrow">ESP8266 · ONE ROOM</div><h1>Room Automation</h1></div></div>
+  <div id="connection" class="status offline"><span class="status-dot"></span>CONNECTING</div>
+</header>
+
+<section class="hero card">
+  <div><div class="eyebrow">LIVE CONTROL</div><h2>Your room, at a glance.</h2>
+  <p>Saved relay states are restored automatically after power returns.</p></div>
+  <div class="hero-meta"><span>FIRMWARE</span><strong id="version">—</strong></div>
+</section>
+
+<section class="section-head"><div><div class="eyebrow">APPLIANCES</div><h2>Control center</h2></div><div class="live-pill"><span class="pulse"></span>LIVE STATE</div></section>
+
+<section class="relay-grid compact-relays" id="relayGrid">
+  <article class="relay-card card" data-index="0">
+    <div class="relay-top"><div class="device-icon fan-icon">⌁</div><span class="relay-channel">RELAY 01 · D1</span></div>
+    <div class="relay-info"><h3>Ceiling Fan</h3><p>Room cooling</p></div>
+    <button class="power-control" data-toggle="0" aria-pressed="false"><span class="power-ring"></span><span class="power-label">OFF</span></button>
+  </article>
+  <article class="relay-card card" data-index="1">
+    <div class="relay-top"><div class="device-icon socket-icon">＋</div><span class="relay-channel">RELAY 02 · D2</span></div>
+    <div class="relay-info"><h3>Charging Socket</h3><p>Power outlet</p></div>
+    <button class="power-control" data-toggle="1" aria-pressed="false"><span class="power-ring"></span><span class="power-label">OFF</span></button>
+  </article>
+  <article class="relay-card card" data-index="2">
+    <div class="relay-top"><div class="device-icon led-icon">✦</div><span class="relay-channel">RELAY 03 · D5</span></div>
+    <div class="relay-info"><h3>LED 1</h3><p>Room lighting</p></div>
+    <button class="power-control" data-toggle="2" aria-pressed="false"><span class="power-ring"></span><span class="power-label">OFF</span></button>
+  </article>
+  <article class="relay-card card" data-index="3">
+    <div class="relay-top"><div class="device-icon led-icon">✦</div><span class="relay-channel">RELAY 04 · D6</span></div>
+    <div class="relay-info"><h3>LED 2</h3><p>Room lighting</p></div>
+    <button class="power-control" data-toggle="3" aria-pressed="false"><span class="power-ring"></span><span class="power-label">OFF</span></button>
+  </article>
+</section>
+
+<section class="section-head compact"><div><div class="eyebrow">SYSTEM</div><h2>Controller status</h2></div></section>
+<section class="telemetry-grid">
+  <div class="metric card"><span>STA IP</span><strong id="ip">—</strong></div>
+  <div class="metric card"><span>AP IP</span><strong id="apIp">—</strong></div>
+  <div class="metric card"><span>WI-FI SIGNAL</span><strong id="rssi">—</strong></div>
+  <div class="metric card"><span>FREE HEAP</span><strong id="heap">—</strong></div>
+  <div class="metric card"><span>UPTIME</span><strong id="uptime">—</strong></div>
+  <div class="metric card"><span>AP CLIENTS</span><strong id="apClients">—</strong></div>
+</section>
+
+<nav class="bottom-nav card">
+  <a class="nav-primary" href="/settings.html"><span>⚙</span> Settings</a>
+  <button id="rebootBtn" class="nav-secondary"><span>↻</span> Reboot</button>
+</nav>
+<p id="message" class="toast" role="status"></p>
+<footer>Local controller · no cloud required · state stored on device</footer>
+</main>
+<script src="/app.js"></script>
+</body>
+</html>

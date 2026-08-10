@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#07101d"><meta name="color-scheme" content="dark">
+<title>Settings · Room Automation</title><link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="ambient ambient-a"></div><div class="ambient ambient-b"></div>
+<main class="shell">
+<header class="topbar"><div class="brand"><div class="brand-mark">RA</div><div><div class="eyebrow">SYSTEM CONFIGURATION</div><h1>Settings</h1></div></div><a class="nav-primary btn" href="/">← Dashboard</a></header>
+<section class="hero card"><div><div class="eyebrow">LOCAL CONTROL</div><h2>Configure the controller.</h2><p>Settings are validated and stored on the ESP8266. Network changes are applied after a controlled reboot.</p></div><div class="hero-meta"><span>CAPTIVE PORTAL</span><strong>ACTIVE</strong></div></section>
+
+<div class="form-layout">
+<section class="card formcard"><div class="eyebrow">NETWORK 01</div><h2>Access Point</h2><p class="sub">Connect directly to the ESP8266. DNS captive-portal redirection is enabled.</p>
+<label>AP SSID<input id="apSsid" maxlength="32" autocomplete="off"></label>
+<label>AP password<input id="apPassword" type="password" maxlength="64" autocomplete="new-password" placeholder="Leave blank to keep current"></label>
+<label>Channel<select id="apChannel"><option>1</option><option>6</option><option>11</option><option>13</option></select></label></section>
+
+<section class="card formcard"><div class="eyebrow">NETWORK 02</div><h2>Station Wi-Fi</h2><p class="sub">Use your home router for normal LAN access.</p>
+<label>SSID<input id="staSsid" maxlength="32" autocomplete="off" placeholder="Tap a network below or enter hidden SSID"></label>
+<label>Password<input id="staPassword" type="password" maxlength="64" autocomplete="new-password" placeholder="Leave blank to keep current"></label>
+<div class="wifi-help">Real 2.4 GHz scan. Hidden networks are detected but their SSID is not broadcast, so enter the hidden SSID manually. The ESP8266 does not lock to a saved channel; it follows the router if the channel changes.</div>
+<div class="actions"><button id="scanBtn" class="btn">Scan nearby Wi-Fi</button></div><div id="scanList" class="scanlist"></div></section>
+
+<section class="card formcard"><div class="eyebrow">DEVICE</div><h2>Controller</h2><p class="sub">Basic identity and relay input behavior.</p>
+<label>Device name<input id="deviceName" maxlength="32"></label>
+<label class="check-row"><input id="activeLow" type="checkbox"> Relay inputs are Active-Low</label>
+<div class="actions"><button id="saveBtn" class="btn primary">Save network & device settings</button></div></section>
+
+<section class="card formcard"><div class="eyebrow">SECURITY</div><h2>OTA password</h2><p class="sub">The current password is never returned. Changing it requires the old password.</p>
+<label>Old password<input id="oldOta" type="password" maxlength="64" autocomplete="current-password"></label>
+<label>New password<input id="newOta" type="password" maxlength="64" autocomplete="new-password"></label>
+<label>Confirm new password<input id="confirmOta" type="password" maxlength="64" autocomplete="new-password"></label>
+<div class="actions"><button id="otaPassBtn" class="btn primary">Change OTA password</button></div></section>
+
+<section class="card formcard"><div class="eyebrow">FIRMWARE</div><h2>OTA update</h2><p class="sub">Select a compatible ESP8266 firmware .bin. Authentication is required before firmware is written.</p>
+<form id="otaForm"><label>OTA password<input id="otaUploadPassword" name="password" type="password" maxlength="64" autocomplete="current-password" required></label>
+<label>Firmware file<div class="filebox"><input id="firmware" name="firmware" type="file" accept=".bin,application/octet-stream" required></div></label>
+<div class="actions"><button type="submit" class="btn primary">Upload & update</button></div></form>
+<progress id="otaProgress" max="100" value="0" hidden></progress><p id="otaStatus" class="toast"></p></section>
+
+<section class="card formcard danger-card"><div class="eyebrow">RECOVERY</div><h2>Factory reset</h2><p class="sub">Clears AP/STA settings, OTA credential and saved relay states. The hardware button on D7/GPIO13 also performs this reset when held for 10 seconds.</p>
+<div class="actions"><button id="factoryBtn" class="btn danger">Factory reset</button></div></section>
+</div>
+<p id="settingsMessage" class="toast" role="status"></p><footer>Configuration stays local to the controller · no cloud service required</footer>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+function msg(t,ok=true){const e=$('settingsMessage');e.textContent=t;e.className='toast '+(ok?'ok':'error');}
+async function api(url,o={}){const r=await fetch(url,{cache:'no-store',...o});let d={};try{d=await r.json()}catch(_){}if(!r.ok)throw Error(d.error||'Request failed');return d}
+async function load(){const d=await api('/api/settings');$('apSsid').value=d.apSsid||'';$('apChannel').value=String(d.apChannel||6);$('staSsid').value=d.staSsid||'';$('deviceName').value=d.deviceName||'';$('activeLow').checked=!!d.relayActiveLow}
+$('saveBtn').onclick=async()=>{const b=$('saveBtn');b.disabled=true;try{const d=await api('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({apSsid:$('apSsid').value,apPassword:$('apPassword').value,apChannel:Number($('apChannel').value),staSsid:$('staSsid').value,staPassword:$('staPassword').value,deviceName:$('deviceName').value,relayActiveLow:$('activeLow').checked})});msg(d.message||'Saved. Rebooting…')}catch(e){msg(e.message,false)}finally{b.disabled=false}};
+$('scanBtn').onclick=async()=>{
+ const btn=$('scanBtn'),box=$('scanList');
+ if(btn.disabled)return;
+ btn.disabled=true;
+ box.innerHTML='<div class="scan-state">Scanning real nearby 2.4 GHz networks…</div>';
+ try{
+   const d=await api('/api/wifi/scan');
+   box.replaceChildren();
+   if(!Array.isArray(d)||!d.length){box.innerHTML='<div class="scan-state">No networks found.</div>';return;}
+   d.forEach(x=>{
+     const b=document.createElement('button');
+     b.className='scanitem'+(x.ssid?'':' hidden-network');
+     b.type='button';
+     const name=x.ssid||'Hidden network — SSID required';
+     b.innerHTML='<span class="scan-main"></span><span class="scan-meta"></span>';
+     b.querySelector('.scan-main').textContent=name;
+     b.querySelector('.scan-meta').textContent=`${x.rssi} dBm · CH ${x.channel}${x.secure?' · secured':' · open'}`;
+     b.onclick=()=>{
+       if(x.ssid){
+         $('staSsid').value=x.ssid;
+         $('staPassword').focus();
+       }else{
+         $('staSsid').focus();
+         msg('Hidden Wi-Fi: enter its SSID and password, then save.',true);
+       }
+     };
+     box.appendChild(b);
+   });
+ }catch(e){box.innerHTML='';const err=document.createElement('div');err.className='scan-state error';err.textContent=e.message;box.appendChild(err);}
+ finally{btn.disabled=false;}
+};
+$('otaPassBtn').onclick=async()=>{try{const d=await api('/api/ota/password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({oldPassword:$('oldOta').value,newPassword:$('newOta').value,confirmPassword:$('confirmOta').value})});msg(d.message||'OTA password changed. Rebooting.')}catch(e){msg(e.message,false)}};
+$('otaForm').onsubmit=e=>{e.preventDefault();const file=$('firmware').files[0];if(!file)return;const p=$('otaProgress');p.hidden=false;p.value=0;$('otaStatus').textContent='Uploading firmware…';const x=new XMLHttpRequest();x.open('POST','/api/ota/upload');x.setRequestHeader('X-OTA-Password',$('otaUploadPassword').value);x.upload.onprogress=v=>{if(v.lengthComputable)p.value=v.loaded/v.total*100};x.onload=()=>{try{const d=JSON.parse(x.responseText);if(x.status<200||x.status>=300)throw Error(d.error||'OTA failed');p.value=100;$('otaStatus').textContent=d.message||'Firmware accepted. Rebooting…'}catch(err){$('otaStatus').textContent=err.message}};x.onerror=()=>{$('otaStatus').textContent='Network error during OTA upload.'};x.send(new FormData(e.target))};
+$('factoryBtn').onclick=async()=>{if(prompt('Type RESET to confirm factory reset')!=='RESET')return;try{const d=await api('/api/factory-reset',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'confirm=RESET'});msg(d.message||'Factory reset complete.')}catch(e){msg(e.message,false)}};
+load().catch(e=>msg('Could not load settings: '+e.message,false));
+</script>
+</body>
+</html>
