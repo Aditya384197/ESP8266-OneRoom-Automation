@@ -14,46 +14,80 @@ jobs:
 
     steps:
 
-      # Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Setup Python
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.x"
 
-      # Install PlatformIO
       - name: Install PlatformIO
         run: |
           python -m pip install --upgrade pip
           pip install platformio
+          pip install esptool
 
-      # Build ESP8266 firmware
+      # ---------------------------------------------------
+      # Build firmware
+      # ---------------------------------------------------
+
       - name: Build firmware
         run: |
           pio run -e nodemcuv2 -v
 
-      # Verify firmware
-      - name: Verify firmware
-        run: |
-          echo "===== Build directory ====="
-          ls -lah .pio/build/nodemcuv2/
+      # ---------------------------------------------------
+      # Build LittleFS filesystem
+      # ---------------------------------------------------
 
+      - name: Build LittleFS
+        run: |
+          pio run -e nodemcuv2 -t buildfs -v
+
+      # ---------------------------------------------------
+      # Verify outputs
+      # ---------------------------------------------------
+
+      - name: Verify build outputs
+        run: |
           echo "===== Firmware ====="
+          ls -lh .pio/build/nodemcuv2/firmware.bin
           test -f .pio/build/nodemcuv2/firmware.bin
 
-          echo "Firmware successfully generated:"
-          ls -lh .pio/build/nodemcuv2/firmware.bin
+          echo "===== LittleFS ====="
+          ls -lh .pio/build/nodemcuv2/littlefs.bin
+          test -f .pio/build/nodemcuv2/littlefs.bin
 
-      # Prepare firmware artifact
-      - name: Prepare artifact
+      # ---------------------------------------------------
+      # Merge firmware + LittleFS into ONE flash image
+      # ---------------------------------------------------
+
+      - name: Create merged firmware
+        run: |
+          esptool merge_bin \
+            -o .pio/build/nodemcuv2/merged_firmware.bin \
+            --flash_size 4MB \
+            0x00000 .pio/build/nodemcuv2/firmware.bin \
+            0x300000 .pio/build/nodemcuv2/littlefs.bin
+
+      # ---------------------------------------------------
+      # Rename merged image to firmware.bin
+      # ---------------------------------------------------
+
+      - name: Prepare final firmware
         run: |
           mkdir -p artifacts
-          cp .pio/build/nodemcuv2/firmware.bin artifacts/firmware.bin
 
-      # Upload firmware
+          cp .pio/build/nodemcuv2/merged_firmware.bin \
+             artifacts/firmware.bin
+
+          echo "===== FINAL FIRMWARE ====="
+          ls -lh artifacts/firmware.bin
+
+      # ---------------------------------------------------
+      # Upload ONLY one file
+      # ---------------------------------------------------
+
       - name: Upload firmware
         uses: actions/upload-artifact@v4
         with:
