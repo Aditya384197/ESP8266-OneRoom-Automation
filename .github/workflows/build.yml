@@ -9,70 +9,166 @@ on:
   workflow_dispatch:
 
 jobs:
-
   build:
-
     runs-on: ubuntu-latest
 
     steps:
 
+      # ---------------------------------------------------
+      # Checkout
+      # ---------------------------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
 
+
+      # ---------------------------------------------------
+      # Setup Python
+      # ---------------------------------------------------
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.x"
+          python-version: "3.12"
 
+
+      # ---------------------------------------------------
+      # Install PlatformIO
+      # ---------------------------------------------------
       - name: Install PlatformIO
         run: |
           python -m pip install --upgrade pip
           pip install platformio
 
-      - name: Show project structure
-        run: |
-          echo "===== Project ====="
-          find . -maxdepth 3 -type f \
-            ! -path "./.git/*" \
-            ! -path "./.pio/*" \
-            | sort
 
+      # ---------------------------------------------------
+      # Show project structure
+      # ---------------------------------------------------
+      - name: Inspect project
+        run: |
+          echo "===== Project root ====="
+          find . -maxdepth 3 -type f | sort
+
+          echo "===== Data directories ====="
+          find . -type d \( -name data -o -name www -o -name web -o -name frontend \) -print
+
+
+      # ---------------------------------------------------
+      # Prepare LittleFS data directory
+      # ---------------------------------------------------
+      - name: Prepare LittleFS
+        shell: bash
+        run: |
+          set -e
+
+          echo "===== Preparing LittleFS ====="
+
+          # If data/ already exists, use it directly.
+          if [ -d "data" ]; then
+            echo "Using existing data/ directory"
+          else
+            echo "data/ directory not found."
+
+            # Try common web directories.
+            SOURCE_DIR=""
+
+            for DIR in web www frontend filesystem littlefs; do
+              if [ -d "$DIR" ]; then
+                SOURCE_DIR="$DIR"
+                break
+              fi
+            done
+
+            if [ -n "$SOURCE_DIR" ]; then
+              echo "Using web files from: $SOURCE_DIR"
+              mkdir -p data
+              cp -R "$SOURCE_DIR"/. data/
+            else
+              echo "ERROR: No LittleFS web directory was found."
+              echo "Expected one of:"
+              echo "  data/"
+              echo "  web/"
+              echo "  www/"
+              echo "  frontend/"
+              echo "  filesystem/"
+              echo "  littlefs/"
+              exit 1
+            fi
+          fi
+
+          echo ""
+          echo "===== LittleFS contents ====="
+          find data -type f -print | sort
+
+          echo ""
+          echo "===== Required files ====="
+
+          if [ ! -f "data/index.html" ]; then
+            echo "ERROR: data/index.html is missing."
+            exit 1
+          fi
+
+          echo "index.html OK"
+
+          if [ -f "data/app.js" ]; then
+            echo "app.js OK"
+          else
+            echo "WARNING: app.js not found"
+          fi
+
+          if [ -f "data/style.css" ]; then
+            echo "style.css OK"
+          else
+            echo "WARNING: style.css not found"
+          fi
+
+
+      # ---------------------------------------------------
+      # Build firmware
+      # ---------------------------------------------------
       - name: Build firmware
         run: |
           pio run -e nodemcuv2 -v
 
+
+      # ---------------------------------------------------
+      # Build LittleFS
+      # ---------------------------------------------------
       - name: Build LittleFS
         run: |
-          echo "===== Building LittleFS ====="
-
-          if [ ! -d "data" ]; then
-            echo "ERROR: data directory does not exist."
-            exit 1
-          fi
-
-          echo "===== LittleFS source files ====="
-          find data -type f -print | sort
-
           pio run -e nodemcuv2 -t buildfs -v
 
+
+      # ---------------------------------------------------
+      # Verify output
+      # ---------------------------------------------------
       - name: Verify build output
         run: |
+          set -e
+
           echo "===== Build directory ====="
           ls -lah .pio/build/nodemcuv2/
 
+          echo ""
           echo "===== Firmware ====="
-          test -s .pio/build/nodemcuv2/firmware.bin
+          test -f .pio/build/nodemcuv2/firmware.bin
+          ls -lh .pio/build/nodemcuv2/firmware.bin
 
+          echo ""
           echo "===== LittleFS ====="
-          test -s .pio/build/nodemcuv2/littlefs.bin
+          test -f .pio/build/nodemcuv2/littlefs.bin
+          ls -lh .pio/build/nodemcuv2/littlefs.bin
 
-          echo "===== File sizes ====="
-          ls -lh \
-            .pio/build/nodemcuv2/firmware.bin \
-            .pio/build/nodemcuv2/littlefs.bin
+          echo ""
+          echo "===== SUCCESS ====="
+          echo "Both firmware.bin and littlefs.bin were generated."
 
+
+      # ---------------------------------------------------
+      # Prepare artifacts
+      # ---------------------------------------------------
       - name: Prepare artifacts
         run: |
+          set -e
+
           rm -rf artifacts
           mkdir -p artifacts
 
@@ -82,6 +178,13 @@ jobs:
           cp .pio/build/nodemcuv2/littlefs.bin \
              artifacts/littlefs.bin
 
+          echo "===== Artifacts ====="
+          ls -lh artifacts/
+
+
+      # ---------------------------------------------------
+      # Upload artifacts
+      # ---------------------------------------------------
       - name: Upload firmware artifacts
         uses: actions/upload-artifact@v4
         with:
