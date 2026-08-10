@@ -9,7 +9,9 @@ on:
   workflow_dispatch:
 
 jobs:
+
   build:
+
     runs-on: ubuntu-latest
 
     steps:
@@ -26,71 +28,63 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install platformio
-          pip install esptool
 
-      # ---------------------------------------------------
-      # Build firmware
-      # ---------------------------------------------------
+      - name: Show project structure
+        run: |
+          echo "===== Project ====="
+          find . -maxdepth 3 -type f \
+            ! -path "./.git/*" \
+            ! -path "./.pio/*" \
+            | sort
 
       - name: Build firmware
         run: |
           pio run -e nodemcuv2 -v
 
-      # ---------------------------------------------------
-      # Build LittleFS filesystem
-      # ---------------------------------------------------
-
       - name: Build LittleFS
         run: |
+          echo "===== Building LittleFS ====="
+
+          if [ ! -d "data" ]; then
+            echo "ERROR: data directory does not exist."
+            exit 1
+          fi
+
+          echo "===== LittleFS source files ====="
+          find data -type f -print | sort
+
           pio run -e nodemcuv2 -t buildfs -v
 
-      # ---------------------------------------------------
-      # Verify outputs
-      # ---------------------------------------------------
-
-      - name: Verify build outputs
+      - name: Verify build output
         run: |
+          echo "===== Build directory ====="
+          ls -lah .pio/build/nodemcuv2/
+
           echo "===== Firmware ====="
-          ls -lh .pio/build/nodemcuv2/firmware.bin
-          test -f .pio/build/nodemcuv2/firmware.bin
+          test -s .pio/build/nodemcuv2/firmware.bin
 
           echo "===== LittleFS ====="
-          ls -lh .pio/build/nodemcuv2/littlefs.bin
-          test -f .pio/build/nodemcuv2/littlefs.bin
+          test -s .pio/build/nodemcuv2/littlefs.bin
 
-      # ---------------------------------------------------
-      # Merge firmware + LittleFS into ONE flash image
-      # ---------------------------------------------------
+          echo "===== File sizes ====="
+          ls -lh \
+            .pio/build/nodemcuv2/firmware.bin \
+            .pio/build/nodemcuv2/littlefs.bin
 
-      - name: Create merged firmware
+      - name: Prepare artifacts
         run: |
-          esptool merge_bin \
-            -o .pio/build/nodemcuv2/merged_firmware.bin \
-            --flash_size 4MB \
-            0x00000 .pio/build/nodemcuv2/firmware.bin \
-            0x300000 .pio/build/nodemcuv2/littlefs.bin
-
-      # ---------------------------------------------------
-      # Rename merged image to firmware.bin
-      # ---------------------------------------------------
-
-      - name: Prepare final firmware
-        run: |
+          rm -rf artifacts
           mkdir -p artifacts
 
-          cp .pio/build/nodemcuv2/merged_firmware.bin \
+          cp .pio/build/nodemcuv2/firmware.bin \
              artifacts/firmware.bin
 
-          echo "===== FINAL FIRMWARE ====="
-          ls -lh artifacts/firmware.bin
+          cp .pio/build/nodemcuv2/littlefs.bin \
+             artifacts/littlefs.bin
 
-      # ---------------------------------------------------
-      # Upload ONLY one file
-      # ---------------------------------------------------
-
-      - name: Upload firmware
+      - name: Upload firmware artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ESP8266-OneRoom-Automation-firmware
-          path: artifacts/firmware.bin
+          name: ESP8266-OneRoom-Automation
+          path: artifacts/
           if-no-files-found: error
