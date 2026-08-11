@@ -8,23 +8,26 @@ on:
 
   workflow_dispatch:
 
+
 jobs:
+
   build:
+
     runs-on: ubuntu-latest
 
     steps:
 
-      # ---------------------------------------------------
-      # Checkout repository
-      # ---------------------------------------------------
+      # ===================================================
+      # Checkout
+      # ===================================================
 
       - name: Checkout repository
         uses: actions/checkout@v4
 
 
-      # ---------------------------------------------------
-      # Setup Python
-      # ---------------------------------------------------
+      # ===================================================
+      # Python
+      # ===================================================
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -32,9 +35,9 @@ jobs:
           python-version: "3.x"
 
 
-      # ---------------------------------------------------
+      # ===================================================
       # Install PlatformIO
-      # ---------------------------------------------------
+      # ===================================================
 
       - name: Install PlatformIO
         run: |
@@ -42,71 +45,45 @@ jobs:
           pip install platformio
 
 
-      # ---------------------------------------------------
-      # Show project structure
-      # ---------------------------------------------------
+      # ===================================================
+      # Show repository structure
+      # ===================================================
 
-      - name: Inspect project
+      - name: Inspect repository
         run: |
-          echo "===== Project files ====="
-          find . -maxdepth 3 -type f \
+          echo "===== Repository root ====="
+          find . -maxdepth 2 -type f \
             ! -path "./.git/*" \
             ! -path "./.pio/*" \
             | sort
 
 
-      # ---------------------------------------------------
-      # Build ESP8266 firmware
-      # ---------------------------------------------------
+      # ===================================================
+      # Clean previous build
+      # ===================================================
+
+      - name: Clean build
+        run: |
+          set -e
+          pio run -e nodemcuv2 -t clean
+
+
+      # ===================================================
+      # Build firmware
+      # ===================================================
 
       - name: Build firmware
         run: |
-          pio run -e nodemcuv2 -v
-
-
-      # ---------------------------------------------------
-      # Verify prepared LittleFS filesystem
-      #
-      # This project uses:
-      #     data_dir = .piofs
-      #
-      # prepare_fs.py creates .piofs automatically.
-      # DO NOT check for data/
-      # ---------------------------------------------------
-
-      - name: Verify LittleFS source
-        run: |
           set -e
 
-          echo "===== LittleFS source ====="
+          echo "===== Building firmware ====="
 
-          if [ ! -d ".piofs" ]; then
-            echo "ERROR: .piofs directory was not created."
-            exit 1
-          fi
-
-          echo "===== .piofs contents ====="
-          find .piofs -type f -print | sort
-
-          echo ""
-          echo "===== Required web files ====="
-
-          test -s .piofs/index.html
-          echo "index.html OK"
-
-          test -s .piofs/settings.html
-          echo "settings.html OK"
-
-          test -s .piofs/app.js
-          echo "app.js OK"
-
-          test -s .piofs/style.css
-          echo "style.css OK"
+          pio run -e nodemcuv2
 
 
-      # ---------------------------------------------------
+      # ===================================================
       # Build LittleFS
-      # ---------------------------------------------------
+      # ===================================================
 
       - name: Build LittleFS
         run: |
@@ -114,42 +91,82 @@ jobs:
 
           echo "===== Building LittleFS ====="
 
-          pio run -e nodemcuv2 -t buildfs -v
+          pio run -e nodemcuv2 -t buildfs
 
 
-      # ---------------------------------------------------
-      # Verify generated files
-      # ---------------------------------------------------
+      # ===================================================
+      # Verify output
+      # ===================================================
 
-      - name: Verify build output
+      - name: Verify firmware and LittleFS
         run: |
           set -e
 
-          echo "===== Build directory ====="
+          echo ""
+          echo "=================================================="
+          echo " BUILD OUTPUT"
+          echo "=================================================="
+
           ls -lah .pio/build/nodemcuv2/
 
           echo ""
-          echo "===== Firmware ====="
+          echo "Checking firmware.bin..."
 
           test -s .pio/build/nodemcuv2/firmware.bin
 
-          ls -lh .pio/build/nodemcuv2/firmware.bin
+          echo "firmware.bin: OK"
 
           echo ""
-          echo "===== LittleFS ====="
+          echo "Checking littlefs.bin..."
 
           test -s .pio/build/nodemcuv2/littlefs.bin
 
-          ls -lh .pio/build/nodemcuv2/littlefs.bin
+          echo "littlefs.bin: OK"
+
+
+      # ===================================================
+      # Verify LittleFS source
+      # ===================================================
+
+      - name: Verify filesystem source
+        run: |
+          set -e
 
           echo ""
-          echo "===== BUILD SUCCESS ====="
-          echo "firmware.bin and littlefs.bin are ready."
+          echo "=================================================="
+          echo " ROOT WEB FILES"
+          echo "=================================================="
+
+          for file in \
+            index.html \
+            settings.html \
+            app.js \
+            style.css
+          do
+            if [ ! -f "$file" ]; then
+              echo "ERROR: Missing $file"
+              exit 1
+            fi
+
+            echo "OK: $file"
+          done
+
+          echo ""
+          echo "=================================================="
+          echo " LITTLEFS TEMPORARY DIRECTORY"
+          echo "=================================================="
+
+          if [ -d ".piofs" ]; then
+            find .piofs -type f -printf "%p\n" | sort
+          else
+            echo "ERROR: .piofs directory does not exist"
+            exit 1
+          fi
 
 
-      # ---------------------------------------------------
-      # Prepare release artifacts
-      # ---------------------------------------------------
+      # ===================================================
+      # Prepare artifacts
+      # ===================================================
 
       - name: Prepare artifacts
         run: |
@@ -164,13 +181,17 @@ jobs:
           cp .pio/build/nodemcuv2/littlefs.bin \
              artifacts/littlefs.bin
 
-          echo "===== Artifacts ====="
+          echo ""
+          echo "=================================================="
+          echo " FINAL ARTIFACTS"
+          echo "=================================================="
+
           ls -lh artifacts/
 
 
-      # ---------------------------------------------------
-      # Upload firmware artifacts
-      # ---------------------------------------------------
+      # ===================================================
+      # Upload artifacts
+      # ===================================================
 
       - name: Upload firmware artifacts
         uses: actions/upload-artifact@v4
@@ -178,3 +199,4 @@ jobs:
           name: ESP8266-OneRoom-Automation
           path: artifacts/
           if-no-files-found: error
+          retention-days: 30
