@@ -1,48 +1,24 @@
 Import("env")
 
-from pathlib import Path
+import os
 import shutil
 
 
-# ---------------------------------------------------------
+# ============================================================
 # ESP8266 One Room Automation
-# Flat-Root LittleFS Preparation Script
+# Root-based LittleFS preparation
 #
-# Root layout:
-#   index.html
-#   settings.html
-#   app.js
-#   style.css
-#
-# Temporary build directory:
-#   .piofs/
-#
-# This directory is generated automatically.
-# ---------------------------------------------------------
-
-project_dir = Path(env["PROJECT_DIR"])
-filesystem_dir = project_dir / ".piofs"
+# Web files are kept directly in repository root.
+# They are copied into .piofs before PlatformIO builds LittleFS.
+# ============================================================
 
 
-# ---------------------------------------------------------
-# Clean previous temporary filesystem
-# ---------------------------------------------------------
+PROJECT_DIR = env.get("PROJECT_DIR")
 
-if filesystem_dir.exists():
-    shutil.rmtree(filesystem_dir)
+FILESYSTEM_DIR = os.path.join(PROJECT_DIR, ".piofs")
 
 
-filesystem_dir.mkdir(
-    parents=True,
-    exist_ok=True
-)
-
-
-# ---------------------------------------------------------
-# Web files which belong in LittleFS
-# ---------------------------------------------------------
-
-web_files = [
+WEB_FILES = [
     "index.html",
     "settings.html",
     "app.js",
@@ -50,36 +26,93 @@ web_files = [
 ]
 
 
-# ---------------------------------------------------------
-# Copy web assets from repository root
-# to temporary LittleFS directory
-# ---------------------------------------------------------
+def prepare_filesystem(source, target, env):
+    print("")
+    print("============================================================")
+    print(" ESP8266 One Room Automation - Preparing LittleFS")
+    print("============================================================")
 
-for filename in web_files:
+    # --------------------------------------------------------
+    # Remove old temporary filesystem
+    # --------------------------------------------------------
 
-    source = project_dir / filename
-    destination = filesystem_dir / filename
+    if os.path.exists(FILESYSTEM_DIR):
+        shutil.rmtree(FILESYSTEM_DIR)
 
-    if source.is_file():
+    os.makedirs(FILESYSTEM_DIR, exist_ok=True)
 
-        shutil.copy2(
-            source,
-            destination
-        )
+    # --------------------------------------------------------
+    # Copy root web files
+    # --------------------------------------------------------
+
+    copied = 0
+
+    for filename in WEB_FILES:
+
+        source_file = os.path.join(PROJECT_DIR, filename)
+        target_file = os.path.join(FILESYSTEM_DIR, filename)
+
+        if not os.path.isfile(source_file):
+            print(
+                "[LittleFS] WARNING: missing file: {}".format(
+                    filename
+                )
+            )
+            continue
+
+        shutil.copy2(source_file, target_file)
+
+        size = os.path.getsize(target_file)
 
         print(
-            "[LittleFS] Added: {}".format(filename)
+            "[LittleFS] Added: {} ({} bytes)".format(
+                filename,
+                size
+            )
         )
 
-    else:
+        copied += 1
 
-        print(
-            "[LittleFS] WARNING: {} not found".format(filename)
-        )
+    # --------------------------------------------------------
+    # Verify at least index.html exists
+    # --------------------------------------------------------
 
-
-print(
-    "[LittleFS] Temporary filesystem prepared at: {}".format(
-        filesystem_dir
+    index_file = os.path.join(
+        FILESYSTEM_DIR,
+        "index.html"
     )
-)
+
+    if not os.path.isfile(index_file):
+
+        print("")
+        print(
+            "[LittleFS] ERROR: index.html was not found."
+        )
+
+        raise RuntimeError(
+            "index.html is required for LittleFS"
+        )
+
+    # --------------------------------------------------------
+    # Summary
+    # --------------------------------------------------------
+
+    print("")
+    print(
+        "[LittleFS] {} web file(s) prepared.".format(
+            copied
+        )
+    )
+
+    print(
+        "[LittleFS] Temporary filesystem prepared at: {}".format(
+            FILESYSTEM_DIR
+        )
+    )
+
+    print("============================================================")
+    print("")
+
+
+# Run before the build starts.
+prepare_filesystem(None, None, env)
