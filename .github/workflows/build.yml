@@ -9,70 +9,152 @@ on:
   workflow_dispatch:
 
 jobs:
-
   build:
-
     runs-on: ubuntu-latest
 
     steps:
 
+      # ---------------------------------------------------
+      # Checkout repository
+      # ---------------------------------------------------
+
       - name: Checkout repository
         uses: actions/checkout@v4
+
+
+      # ---------------------------------------------------
+      # Setup Python
+      # ---------------------------------------------------
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.x"
 
+
+      # ---------------------------------------------------
+      # Install PlatformIO
+      # ---------------------------------------------------
+
       - name: Install PlatformIO
         run: |
           python -m pip install --upgrade pip
           pip install platformio
 
-      - name: Show project structure
+
+      # ---------------------------------------------------
+      # Show project structure
+      # ---------------------------------------------------
+
+      - name: Inspect project
         run: |
-          echo "===== Project ====="
+          echo "===== Project files ====="
           find . -maxdepth 3 -type f \
             ! -path "./.git/*" \
             ! -path "./.pio/*" \
             | sort
 
+
+      # ---------------------------------------------------
+      # Build ESP8266 firmware
+      # ---------------------------------------------------
+
       - name: Build firmware
         run: |
           pio run -e nodemcuv2 -v
 
-      - name: Build LittleFS
-        run: |
-          echo "===== Building LittleFS ====="
 
-          if [ ! -d "data" ]; then
-            echo "ERROR: data directory does not exist."
+      # ---------------------------------------------------
+      # Verify prepared LittleFS filesystem
+      #
+      # This project uses:
+      #     data_dir = .piofs
+      #
+      # prepare_fs.py creates .piofs automatically.
+      # DO NOT check for data/
+      # ---------------------------------------------------
+
+      - name: Verify LittleFS source
+        run: |
+          set -e
+
+          echo "===== LittleFS source ====="
+
+          if [ ! -d ".piofs" ]; then
+            echo "ERROR: .piofs directory was not created."
             exit 1
           fi
 
-          echo "===== LittleFS source files ====="
-          find data -type f -print | sort
+          echo "===== .piofs contents ====="
+          find .piofs -type f -print | sort
+
+          echo ""
+          echo "===== Required web files ====="
+
+          test -s .piofs/index.html
+          echo "index.html OK"
+
+          test -s .piofs/settings.html
+          echo "settings.html OK"
+
+          test -s .piofs/app.js
+          echo "app.js OK"
+
+          test -s .piofs/style.css
+          echo "style.css OK"
+
+
+      # ---------------------------------------------------
+      # Build LittleFS
+      # ---------------------------------------------------
+
+      - name: Build LittleFS
+        run: |
+          set -e
+
+          echo "===== Building LittleFS ====="
 
           pio run -e nodemcuv2 -t buildfs -v
 
+
+      # ---------------------------------------------------
+      # Verify generated files
+      # ---------------------------------------------------
+
       - name: Verify build output
         run: |
+          set -e
+
           echo "===== Build directory ====="
           ls -lah .pio/build/nodemcuv2/
 
+          echo ""
           echo "===== Firmware ====="
+
           test -s .pio/build/nodemcuv2/firmware.bin
 
+          ls -lh .pio/build/nodemcuv2/firmware.bin
+
+          echo ""
           echo "===== LittleFS ====="
+
           test -s .pio/build/nodemcuv2/littlefs.bin
 
-          echo "===== File sizes ====="
-          ls -lh \
-            .pio/build/nodemcuv2/firmware.bin \
-            .pio/build/nodemcuv2/littlefs.bin
+          ls -lh .pio/build/nodemcuv2/littlefs.bin
+
+          echo ""
+          echo "===== BUILD SUCCESS ====="
+          echo "firmware.bin and littlefs.bin are ready."
+
+
+      # ---------------------------------------------------
+      # Prepare release artifacts
+      # ---------------------------------------------------
 
       - name: Prepare artifacts
         run: |
+          set -e
+
           rm -rf artifacts
           mkdir -p artifacts
 
@@ -81,6 +163,14 @@ jobs:
 
           cp .pio/build/nodemcuv2/littlefs.bin \
              artifacts/littlefs.bin
+
+          echo "===== Artifacts ====="
+          ls -lh artifacts/
+
+
+      # ---------------------------------------------------
+      # Upload firmware artifacts
+      # ---------------------------------------------------
 
       - name: Upload firmware artifacts
         uses: actions/upload-artifact@v4
