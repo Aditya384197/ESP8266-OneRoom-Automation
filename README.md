@@ -1,6 +1,6 @@
-# ESP8266 One Room Automation — v1.5.0
+# ESP8266 One Room Automation — v1.6.0
 
-A local-first four-relay controller for a NodeMCU ESP8266 with a clean relay-only dashboard and a separate slide-style settings area.
+A local-first four-relay controller for a NodeMCU ESP8266 with a clean relay-only dashboard, multi-client asynchronous web server and a separate slide-style settings area.
 
 ## Hardware pin map (unchanged)
 
@@ -24,6 +24,10 @@ Power relay coils from a suitable regulated supply. Do not power relay coils fro
 - Online means the ESP8266 is connected to the configured home Wi-Fi (STA). Offline means it is running its local access point without a home Wi-Fi connection.
 - The logo text is configurable up to 255 characters; its container grows and wraps to fit.
 
+## Multi-client web access
+
+The dashboard is served by ESPAsyncWebServer with ESPAsyncTCP. The older synchronous ESP8266WebServer handled requests one at a time and could make settings controls appear unresponsive while another phone held a connection. Wi-Fi scanning is also non-blocking: the scan starts in the background and the browser polls for its result.
+
 ## Settings menu
 
 Each group opens as an individual slide-style page with a back control:
@@ -37,18 +41,20 @@ Each group opens as an individual slide-style page with a back control:
 - Remote access safety/setup information
 - Device status, restart and factory reset
 
-## Physical switch inputs
+## Physical switch inputs — four extra digital inputs
 
-Four configurable physical switch inputs are supported. They are **disabled by default** because no physical input wiring was specified and some available ESP8266 pins affect boot mode.
+The four wall-switch inputs are provided by a **PCF8574 I/O expander**. This is intentional: with the four relay outputs fixed to D1/D2/D5/D6 and the factory-reset input on D7, the remaining native ESP8266 pins include boot-strap and UART pins. Connecting four maintained GND switches directly to those pins can prevent boot or interfere with serial operation. The PCF8574 provides four additional switch GPIO inputs without using those pins as direct switch terminals.
 
-| NodeMCU | GPIO | Electrical / boot consideration |
+| PCF8574 input | Relay | Switch behavior |
 |---|---:|---|
-| D0 | GPIO16 | No internal pull-up; an external pull-up is required for an Active-Low switch. |
-| D3 | GPIO0 | Boot strap: must be HIGH during reset; a switch held LOW can prevent normal boot. |
-| D4 | GPIO2 | Boot strap: must be HIGH during reset; a switch held LOW can prevent normal boot. |
-| D8 | GPIO15 | Boot strap: must be LOW during reset; external circuitry must not pull it HIGH at reset. |
+| P0 (virtual ID 32) | Relay 1 | Closed to GND = ON; open = OFF |
+| P1 (virtual ID 33) | Relay 2 | Closed to GND = ON; open = OFF |
+| P2 (virtual ID 34) | Relay 3 | Closed to GND = ON; open = OFF |
+| P3 (virtual ID 35) | Relay 4 | Closed to GND = ON; open = OFF |
 
-Use D3, D4 and D8 only with an interface that guarantees the correct reset level. For a robust permanent installation, use an external GPIO expander or dedicated switch interface. D0 requires an external resistor; do not assume an internal pull-up exists. Never connect mains voltage directly to a GPIO.
+**PCF8574 wiring:** power VCC from the ESP8266 3.3V pin and GND to GND; tie A0/A1/A2 to GND for I²C address `0x20`; connect SDA to NodeMCU D3/GPIO0 and SCL to D4/GPIO2. Both I²C lines must be pulled up to 3.3V (typically 4.7kΩ; verify whether the module already contains pull-ups). Connect each maintained wall switch between its own P0/P1/P2/P3 input and GND. Do not wire the wall switches directly to D3/D4. Never connect mains voltage to the PCF8574 or ESP8266.
+
+The device retries PCF8574 detection after a temporary I²C failure. If the expander is absent, local phone control and all other firmware features remain available, but physical switch input is inactive until the expander is connected. In **Maintained** mode the physical switch position is authoritative (closed forces ON; open forces OFF), so a phone command that conflicts with the current physical position is immediately overridden. Select **Follow contact on change** when you want each physical opening/closing transition to command OFF/ON while still allowing phone commands to remain effective until the next physical movement.
 
 ## Timers and schedules
 
@@ -80,7 +86,7 @@ For safe off-site access, use a VPN-capable home router or an always-on gateway 
 ## Storage compatibility and reliability
 
 - Existing DeviceConfig and RelayState records remain compatible.
-- The previous automation record version is migrated in-place. Relay names, switch mappings, timers and schedules are preserved; each relay is initialized as Active-Low until the owner selects its real trigger type. The new logo receives the default text.
+- The previous automation record is migrated in-place. The v1.5 record keeps relay names, logo text, relay polarity, timers and schedules; its former raw ESP GPIO switch assignments are intentionally remapped to PCF8574 P0–P3. Older v1 records keep relay names, timers and schedules, while newly added logo/polarity fields receive safe defaults.
 - The new automation record stores logo text and four independent relay polarity values with CRC validation and a backup file.
 - Files are written through temporary-file and backup-rename handling.
 - Each relay's OFF electrical level is prepared before its GPIO is switched to output.
@@ -104,7 +110,16 @@ GitHub Actions generates:
 
 For the configured 4 MB / 1 MB LittleFS layout, the normal PlatformIO ESP8266 flash offsets are `firmware.bin` at `0x00000` and `littlefs.bin` at `0x300000`. Confirm the board is the 4 MB NodeMCU v2 and use both files from the same workflow run. Flashing LittleFS replaces its contents; it may erase saved settings and credentials.
 
-## v1.5.0 changes
+## v1.6.0 changes
+
+- Replaced the single-client synchronous ESP8266 HTTP server with the maintained ESP32Async asynchronous server and ESP8266 TCP library. This permits multiple phones/browsers to load and use settings routes concurrently.
+- Corrected request-body ownership to use a bounded, request-scoped heap buffer that is safely released when the request ends, including aborted requests.
+- Fixed OTA upload arbitration so a second client cannot mark the first client's upload as rejected.
+- Kept a single one-level Back control and a Home shortcut in the settings header on every settings subpage.
+- Kept logo saving on its dedicated `/api/logo` endpoint, which stores only the logo value and does not unnecessarily rewrite Wi-Fi settings or restart the board.
+- Added PCF8574-based four-channel switch input support, maintained-switch semantics (closed to GND = ON), boot-safe I²C wiring guidance, and periodic expander reconnect attempts.
+
+## v1.5.0 baseline features retained
 
 - Replaced the busy main page with a minimal logo/status/four-relay layout.
 - Made each whole relay tile tappable, with separate ON/OFF styling.

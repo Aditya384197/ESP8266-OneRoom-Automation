@@ -32,12 +32,17 @@ private:
   SwitchRuntime _switches[4];
   unsigned long _timerEndMs[4] = {0, 0, 0, 0};
   unsigned long _lastTimerSaveAt = 0;
+  unsigned long _lastExpanderRetryAt = 0;
+  unsigned long _lastSwitchScanAt = 0;
+  bool _expanderAvailable = false;
+  bool _needsExpander = false;
+  uint8_t _expanderBits = 0xFF;
 
   void beginSwitches();
+  bool readExpander(uint8_t& bits);
   void scanSwitches();
   void processTimers(bool timeSynced);
   void processSchedules(bool timeSynced);
-  void saveAutomation();
   static int32_t localDayKey(const struct tm& value);
-  static bool readSwitchPressed(uint8_t pin, bool activeLow);
+  bool readSwitchPressed(uint8_t virtualPin, bool activeLow, uint8_t expanderBits) const;
 };

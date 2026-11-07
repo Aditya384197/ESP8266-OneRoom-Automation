@@ -20,8 +20,10 @@ public:
   IPAddress apAddress() const;
   int32_t rssi() const;
 
-  // Returns a JSON array string containing nearby networks.
-  bool scanNetworks(String& json);
+  // Starts a non-blocking scan. Returns false if the scan could not start.
+  bool startNetworkScan();
+  // Returns: 0 = still scanning, 1 = complete (JSON array filled), -1 = failed.
+  int collectNetworkScan(String& json);
 
 private:
   ConfigManager* _cfg = nullptr;

@@ -5,7 +5,7 @@ static constexpr uint32_t CONFIG_MAGIC = 0x4F524143UL; // ORAC
 static constexpr uint32_t STATE_MAGIC  = 0x4F524153UL; // ORAS
 static constexpr uint32_t AUTOMATION_MAGIC = 0x4F524141UL; // ORAA
 static constexpr uint16_t FORMAT_VERSION = 1;
-static constexpr uint16_t AUTOMATION_VERSION = 2;
+static constexpr uint16_t AUTOMATION_VERSION = 3;
 
 static const char* DEFAULT_AP_SSID = "RoomAutomation-ESP";
 static const char* DEFAULT_AP_PASS = "RA8266@Setup2026";
@@ -46,17 +46,17 @@ void ConfigManager::defaultAutomation() {
   _automation.magic = AUTOMATION_MAGIC;
   _automation.version = AUTOMATION_VERSION;
 
-  // Physical inputs are disabled until the owner confirms their wiring.
-  // GPIO0/GPIO2/GPIO15 are boot-strap pins and can prevent startup when
-  // externally driven to the wrong level during reset.
-  const uint8_t pins[4] = {255, 255, 255, 255};
+  // Four maintained inputs are provided by an external PCF8574 expander.
+  // Virtual pin IDs 32..35 correspond to PCF8574 P0..P3 respectively.
+  // The switches close to GND (Active-Low): closed = relay ON, open = OFF.
+  const uint8_t pins[4] = {32, 33, 34, 35};
   const uint8_t activeLow[4] = {1, 1, 1, 1};
   const char* names[4] = {"Ceiling Fan", "Charging Socket", "LED 1", "LED 2"};
   strlcpy(_automation.logoText, "Room Automation", sizeof(_automation.logoText));
   for (uint8_t i = 0; i < 4; ++i) {
     _automation.switchPin[i] = pins[i];
     _automation.switchActiveLow[i] = activeLow[i];
-    _automation.switchMode[i] = 0;
+    _automation.switchMode[i] = 1;
     _automation.relayActiveLow[i] = 1; // Safe default for common low-trigger relay boards.
     strlcpy(_automation.relayName[i], names[i], sizeof(_automation.relayName[i]));
   }
@@ -88,9 +88,6 @@ bool ConfigManager::loadState() {
 }
 
 bool ConfigManager::loadAutomation() {
-  // Version-1 automation records are migrated in-place. Existing relay names,
-  // switch mappings, timers and schedules are preserved; new polarity values
-  // default to Active-Low and the new logo gets a safe default.
   struct LegacyAutomationConfigV1 {
     uint32_t magic;
     uint16_t version;
@@ -103,8 +100,63 @@ bool ConfigManager::loadAutomation() {
     ScheduleRule schedules[8];
     uint32_t crc32;
   };
+  // v2 has the same layout as the current v3 record. Only the meaning of
+  // switchPin changed from raw ESP GPIOs to virtual PCF8574 P0-P3 inputs.
+  struct LegacyAutomationConfigV2 {
+    uint32_t magic;
+    uint16_t version;
+    uint16_t reserved;
+    uint8_t switchPin[4];
+    uint8_t switchActiveLow[4];
+    uint8_t switchMode[4];
+    char relayName[4][24];
+    char logoText[256];
+    uint8_t relayActiveLow[4];
+    RelayTimerConfig timers[4];
+    ScheduleRule schedules[8];
+    uint32_t crc32;
+  };
 
-  auto migrateLegacy = [&](const char* path) -> bool {
+  auto validLegacyCrc = [&](void* value, size_t size, uint32_t stored) -> bool {
+    uint8_t* bytes = static_cast<uint8_t*>(value);
+    // The caller zeroes the CRC field before calculating it.
+    return stored == crc32(bytes, size);
+  };
+  auto installSwitchDefaults = [&]() {
+    const uint8_t ports[4] = {32, 33, 34, 35};
+    for (uint8_t i = 0; i < 4; ++i) {
+      _automation.switchPin[i] = ports[i];
+      _automation.switchActiveLow[i] = 1;
+      _automation.switchMode[i] = 1;
+    }
+  };
+
+  auto migrateV2 = [&](const char* path) -> bool {
+    File f = LittleFS.open(path, "r");
+    if (!f || (size_t)f.size() != sizeof(LegacyAutomationConfigV2)) {
+      if (f) f.close();
+      return false;
+    }
+    LegacyAutomationConfigV2 old{};
+    const size_t n = f.read((uint8_t*)&old, sizeof(old));
+    f.close();
+    if (n != sizeof(old) || old.magic != AUTOMATION_MAGIC || old.version != 2) return false;
+    const uint32_t stored = old.crc32;
+    old.crc32 = 0;
+    if (!validLegacyCrc(&old, sizeof(old), stored)) return false;
+
+    defaultAutomation();
+    memcpy(_automation.relayName, old.relayName, sizeof(old.relayName));
+    strlcpy(_automation.logoText, old.logoText, sizeof(_automation.logoText));
+    memcpy(_automation.relayActiveLow, old.relayActiveLow, sizeof(old.relayActiveLow));
+    memcpy(_automation.timers, old.timers, sizeof(old.timers));
+    memcpy(_automation.schedules, old.schedules, sizeof(old.schedules));
+    installSwitchDefaults();
+    updateAutomationCrc();
+    return saveAutomation();
+  };
+
+  auto migrateV1 = [&](const char* path) -> bool {
     File f = LittleFS.open(path, "r");
     if (!f || (size_t)f.size() != sizeof(LegacyAutomationConfigV1)) {
       if (f) f.close();
@@ -116,23 +168,20 @@ bool ConfigManager::loadAutomation() {
     if (n != sizeof(old) || old.magic != AUTOMATION_MAGIC || old.version != 1) return false;
     const uint32_t stored = old.crc32;
     old.crc32 = 0;
-    if (stored != crc32((const uint8_t*)&old, sizeof(old))) return false;
+    if (!validLegacyCrc(&old, sizeof(old), stored)) return false;
 
     defaultAutomation();
-    memcpy(_automation.switchPin, old.switchPin, sizeof(old.switchPin));
-    memcpy(_automation.switchActiveLow, old.switchActiveLow, sizeof(old.switchActiveLow));
-    memcpy(_automation.switchMode, old.switchMode, sizeof(old.switchMode));
     memcpy(_automation.relayName, old.relayName, sizeof(old.relayName));
     memcpy(_automation.timers, old.timers, sizeof(old.timers));
     memcpy(_automation.schedules, old.schedules, sizeof(old.schedules));
-    for (uint8_t i = 0; i < 4; ++i) _automation.relayActiveLow[i] = 1;
+    installSwitchDefaults();
     updateAutomationCrc();
     return saveAutomation();
   };
 
   if (loadBinary("/automation.bin", "/automation.bak", &_automation, sizeof(_automation))) return true;
-  if (migrateLegacy("/automation.bin")) return true;
-  if (migrateLegacy("/automation.bak")) return true;
+  if (migrateV2("/automation.bin") || migrateV2("/automation.bak")) return true;
+  if (migrateV1("/automation.bin") || migrateV1("/automation.bak")) return true;
   defaultAutomation();
   return saveAutomation();
 }
@@ -245,7 +294,7 @@ bool ConfigManager::validateAutomation(const AutomationConfig& a) const {
   if (logoLen == 0 || logoLen >= sizeof(a.logoText)) return false;
   for (uint8_t i = 0; i < 4; ++i) {
     const uint8_t pin = a.switchPin[i];
-    if (pin != 255 && pin != 16 && pin != 0 && pin != 2 && pin != 15) return false;
+    if (pin != 255 && (pin < 32 || pin > 35)) return false;
     if (a.switchActiveLow[i] > 1 || a.switchMode[i] > 1 || a.relayActiveLow[i] > 1) return false;
     const size_t nameLen = strnlen(a.relayName[i], sizeof(a.relayName[i]));
     if (nameLen == 0 || nameLen >= sizeof(a.relayName[i])) return false;

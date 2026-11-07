@@ -50,7 +50,7 @@ struct AutomationConfig {
   uint16_t reserved;
   uint8_t switchPin[4];
   uint8_t switchActiveLow[4];
-  uint8_t switchMode[4];     // 0 = momentary toggle, 1 = maintained input
+  uint8_t switchMode[4];     // 0 = follow contact on transitions, 1 = maintained level
   char relayName[4][24];
   char logoText[256];
   uint8_t relayActiveLow[4]; // 1 = Active-Low, 0 = Active-High

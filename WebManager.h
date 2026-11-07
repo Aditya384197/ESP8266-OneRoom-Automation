@@ -1,8 +1,14 @@
 #pragma once
+
 #include <Arduino.h>
-#include <ESP8266WebServer.h>
+#include <ESP8266WiFi.h>
+#include <ESPAsyncTCP.h>
+#include <ESPAsyncWebServer.h>
 #include <DNSServer.h>
 #include <Updater.h>
+#include <ArduinoJson.h>
+#include <functional>
+
 #include "ConfigManager.h"
 #include "RelayManager.h"
 #include "WiFiManager.h"
@@ -16,7 +22,9 @@ public:
   bool otaInProgress() const { return _otaInProgress; }
 
 private:
-  ESP8266WebServer _server{80};
+  using JsonRouteHandler = std::function<void(AsyncWebServerRequest*, JsonDocument&)>;
+
+  AsyncWebServer _server{80};
   DNSServer _dnsServer;
   ConfigManager* _cfg = nullptr;
   RelayManager* _relays = nullptr;
@@ -26,29 +34,34 @@ private:
   bool _otaInProgress = false;
   bool _otaRejected = false;
   bool _otaReady = false;
+  AsyncWebServerRequest* _otaOwner = nullptr;
   unsigned long _restartAt = 0;
 
   void setupRoutes();
+  void onJson(const char* uri, WebRequestMethodComposite method, JsonRouteHandler handler);
   void startCaptiveDNS();
-  void handleCaptivePortal();
-  void handleState();
-  void handleSettingsGet();
-  void handleSettingsSave();
-  void handleAutomationGet();
-  void handleTimer();
-  void handleSchedule();
-  void handleRelay();
-  void handleWifiScan();
-  void handleOtaPassword();
-  void handleOtaUploadDone();
-  void handleOtaUpload();
-  void handleFactoryReset();
-  void handleReboot();
-  void sendFile(const char* path, const char* contentType);
+  void handleCaptivePortal(AsyncWebServerRequest* request);
+  void handleState(AsyncWebServerRequest* request);
+  void handleSettingsGet(AsyncWebServerRequest* request);
+  void handleSettingsSave(AsyncWebServerRequest* request, JsonDocument& doc);
+  void handleLogoSave(AsyncWebServerRequest* request, JsonDocument& doc);
+  void handleAutomationGet(AsyncWebServerRequest* request);
+  void handleTimer(AsyncWebServerRequest* request, JsonDocument& doc);
+  void handleSchedule(AsyncWebServerRequest* request, JsonDocument& doc);
+  void handleRelay(AsyncWebServerRequest* request, JsonDocument& doc);
+  void handleWifiScan(AsyncWebServerRequest* request);
+  void handleWifiScanResult(AsyncWebServerRequest* request);
+  void handleOtaPassword(AsyncWebServerRequest* request, JsonDocument& doc);
+  void handleOtaUploadDone(AsyncWebServerRequest* request);
+  void handleOtaUpload(AsyncWebServerRequest* request, const String& filename,
+                       size_t index, uint8_t* data, size_t len, bool final);
+  void handleFactoryReset(AsyncWebServerRequest* request);
+  void handleReboot(AsyncWebServerRequest* request);
+  void sendFile(AsyncWebServerRequest* request, const char* path, const char* contentType);
 
   bool validOtaPassword(const String& password) const;
   String md5Of(const String& value) const;
   bool validText(const String& value, size_t maxLen, bool allowEmpty) const;
-  void jsonError(int code, const char* message);
+  void jsonError(AsyncWebServerRequest* request, int code, const char* message);
   void scheduleRestart(unsigned long delayMs = 500);
 };

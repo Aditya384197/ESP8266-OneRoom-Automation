@@ -1,9 +1,14 @@
 #include "AutomationManager.h"
 #include <time.h>
+#include <Wire.h>
 
 static constexpr unsigned long SWITCH_DEBOUNCE_MS = 45UL;
+static constexpr unsigned long SWITCH_SAMPLE_INTERVAL_MS = 10UL;
 static constexpr unsigned long TIMER_SAVE_INTERVAL_MS = 300000UL; // 5-minute checkpoint to limit flash wear
 static constexpr uint32_t MAX_TIMER_SECONDS = 2592000UL;
+static constexpr uint8_t SWITCH_EXPANDER_ADDRESS = 0x20; // PCF8574 A0-A2 = GND
+static constexpr uint8_t SWITCH_I2C_SDA_GPIO = 0;         // NodeMCU D3
+static constexpr uint8_t SWITCH_I2C_SCL_GPIO = 2;         // NodeMCU D4
 
 void AutomationManager::begin(ConfigManager& cfg, RelayManager& relays) {
   _cfg = &cfg;
@@ -27,57 +32,100 @@ const AutomationConfig& AutomationManager::config() const {
 }
 
 void AutomationManager::beginSwitches() {
+  if (!_cfg || !_relays) return;
   const AutomationConfig& a = _cfg->automation();
+  bool needsExpander = false;
+  for (uint8_t i = 0; i < 4; ++i) {
+    if (a.switchPin[i] >= 32 && a.switchPin[i] <= 35) needsExpander = true;
+  }
+  _needsExpander = needsExpander;
+  if (!needsExpander) {
+    _expanderAvailable = false;
+    return;
+  }
+
+  _lastExpanderRetryAt = millis();
+  // The PCF8574 is powered at 3.3 V. I2C pull-ups must hold SDA/SCL HIGH
+  // during reset because GPIO0/D3 and GPIO2/D4 are ESP8266 boot-strap pins.
+  // External switches connect only to PCF8574 P0-P3 and GND.
+  Wire.begin(SWITCH_I2C_SDA_GPIO, SWITCH_I2C_SCL_GPIO);
+  Wire.setClock(100000);
+  Wire.beginTransmission(SWITCH_EXPANDER_ADDRESS);
+  Wire.write(0xFF); // Release all quasi-bidirectional port pins for input.
+  if (Wire.endTransmission() != 0) {
+    _expanderAvailable = false;
+    Serial.println(F("PCF8574 not detected at 0x20; physical switch inputs are waiting."));
+    return;
+  }
+
+  _expanderAvailable = true;
+  if (!readExpander(_expanderBits)) {
+    _expanderAvailable = false;
+    Serial.println(F("PCF8574 read failed; physical switch inputs are waiting."));
+    return;
+  }
+
   const unsigned long now = millis();
   for (uint8_t i = 0; i < 4; ++i) {
     const uint8_t pin = a.switchPin[i];
-    if (pin == 255) continue;
-
-    // GPIO15 (D8) has an external pull-down on typical NodeMCU boards;
-    // the other supported pins use their internal pull-up.
-    if (pin == 15 || pin == 16) pinMode(pin, INPUT);
-    else pinMode(pin, INPUT_PULLUP);
-
-    _switches[i].rawPressed = readSwitchPressed(pin, a.switchActiveLow[i] != 0);
+    if (pin < 32 || pin > 35) continue;
+    _switches[i].rawPressed = readSwitchPressed(pin, true, _expanderBits);
     _switches[i].stablePressed = _switches[i].rawPressed;
     _switches[i].changedAt = now;
-    if (a.switchMode[i] == 1) _relays->set(i, _switches[i].stablePressed, true);
+    // Align the relay to the physical contact once at startup in both modes.
+    // Mode 1 keeps enforcing the input level; mode 0 permits phone overrides
+    // until the next physical contact transition.
+    _relays->set(i, _switches[i].stablePressed, false);
   }
+  Serial.println(F("PCF8574 physical switch inputs ready (P0-P3)."));
 }
 
-bool AutomationManager::readSwitchPressed(uint8_t pin, bool activeLow) {
-  const bool high = digitalRead(pin) == HIGH;
+bool AutomationManager::readExpander(uint8_t& bits) {
+  if (!_expanderAvailable) return false;
+  const uint8_t received = Wire.requestFrom(SWITCH_EXPANDER_ADDRESS, (uint8_t)1);
+  if (received != 1 || !Wire.available()) {
+    _expanderAvailable = false;
+    return false;
+  }
+  bits = (uint8_t)Wire.read();
+  return true;
+}
+
+bool AutomationManager::readSwitchPressed(uint8_t virtualPin, bool activeLow,
+                                          uint8_t expanderBits) const {
+  if (virtualPin < 32 || virtualPin > 35) return false;
+  const bool high = (expanderBits & (1U << (virtualPin - 32U))) != 0;
   return activeLow ? !high : high;
 }
 
 void AutomationManager::scanSwitches() {
-  if (!_cfg || !_relays) return;
-  const AutomationConfig& a = _cfg->automation();
+  if (!_cfg || !_relays || !_needsExpander) return;
   const unsigned long now = millis();
+  if ((unsigned long)(now - _lastSwitchScanAt) < SWITCH_SAMPLE_INTERVAL_MS) return;
+  _lastSwitchScanAt = now;
+  if (!_expanderAvailable) {
+    if ((unsigned long)(now - _lastExpanderRetryAt) >= 3000UL) beginSwitches();
+    return;
+  }
+  if (!readExpander(_expanderBits)) return;
 
+  const AutomationConfig& a = _cfg->automation();
   for (uint8_t i = 0; i < 4; ++i) {
     const uint8_t pin = a.switchPin[i];
-    if (pin == 255) continue;
-
-    const bool pressed = readSwitchPressed(pin, a.switchActiveLow[i] != 0);
+    if (pin < 32 || pin > 35) continue;
+    const bool pressed = readSwitchPressed(pin, true, _expanderBits);
     if (pressed != _switches[i].rawPressed) {
       _switches[i].rawPressed = pressed;
       _switches[i].changedAt = now;
     }
-
     if ((unsigned long)(now - _switches[i].changedAt) >= SWITCH_DEBOUNCE_MS &&
         _switches[i].stablePressed != _switches[i].rawPressed) {
       _switches[i].stablePressed = _switches[i].rawPressed;
-      if (a.switchMode[i] == 0 && _switches[i].stablePressed) {
-        _relays->toggle(i);
-      }
+      // Transition-follow mode: closed edge commands ON, open edge commands
+      // OFF. A phone command remains in effect until the physical switch moves.
+      if (a.switchMode[i] == 0) _relays->set(i, _switches[i].stablePressed, true);
     }
-
-    // Retry a failed persisted write for maintained switches. set() is
-    // idempotent and does not write flash when the logical state already
-    // matches, so this does not create a per-loop flash-write problem.
-    if (a.switchMode[i] == 1 &&
-        _relays->get(i) != _switches[i].stablePressed) {
+    if (a.switchMode[i] == 1 && _relays->get(i) != _switches[i].stablePressed) {
       _relays->set(i, _switches[i].stablePressed, true);
     }
   }

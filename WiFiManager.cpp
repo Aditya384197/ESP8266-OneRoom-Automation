@@ -173,112 +173,52 @@ int32_t WiFiController::rssi() const {
   return staConnected() ? WiFi.RSSI() : 0;
 }
 
-bool WiFiController::scanNetworks(String& json) {
-  json = "[]";
+bool WiFiController::startNetworkScan() {
+  // A second client may request a scan while one is already active. Reuse
+  // the existing scan rather than starting a competing radio operation.
+  if (WiFi.scanComplete() == WIFI_SCAN_RUNNING) return true;
 
-  /*
-   * Remove results from any previous scan.
-   */
   WiFi.scanDelete();
-  yield();
+  const int result = WiFi.scanNetworks(true, true); // async, include hidden APs
+  return result == WIFI_SCAN_RUNNING || result >= 0;
+}
 
-  /*
-   * Real synchronous RF scan.
-   *
-   * Parameter 1:
-   *   false = synchronous scan
-   *
-   * Parameter 2:
-   *   true = show hidden networks
-   */
-  int scanCount = WiFi.scanNetworks(false, true);
-
-  if (scanCount < 0) {
+int WiFiController::collectNetworkScan(String& json) {
+  json = "[]";
+  const int completed = WiFi.scanComplete();
+  if (completed == WIFI_SCAN_RUNNING) return 0;
+  if (completed == WIFI_SCAN_FAILED || completed < 0) {
     WiFi.scanDelete();
-    return false;
+    return -1;
   }
 
-  /*
-   * Keep memory usage controlled on ESP8266.
-   */
-  const int maxResults = 40;
-
-  if (scanCount > maxResults) {
-    scanCount = maxResults;
-  }
-
-  json.reserve(
-    (size_t)scanCount * 110U + 4U
-  );
-
+  int scanCount = completed;
+  if (scanCount > 40) scanCount = 40;
+  json.reserve((size_t)scanCount * 110U + 4U);
   json = "[";
 
   for (int i = 0; i < scanCount; ++i) {
-
-    if (i > 0) {
-      json += ",";
-    }
-
+    if (i > 0) json += ",";
     String ssid = WiFi.SSID(i);
-
-    /*
-     * Empty SSID means the network is hidden.
-     */
-    const bool hidden =
-      (ssid.length() == 0);
-
-    /*
-     * Escape characters that could break JSON.
-     */
+    const bool hidden = ssid.length() == 0;
     ssid.replace("\\", "\\\\");
     ssid.replace("\"", "\\\"");
     ssid.replace("\r", "\\r");
     ssid.replace("\n", "\\n");
 
-    const int32_t signal =
-      WiFi.RSSI(i);
-
-    const uint8_t channel =
-      WiFi.channel(i);
-
-    const bool secure =
-      (WiFi.encryptionType(i) != ENC_TYPE_NONE);
-
-    json += "{";
-
-    json += "\"ssid\":\"";
+    json += "{\"ssid\":\"";
     json += ssid;
-    json += "\",";
-
-    json += "\"rssi\":";
-    json += String(signal);
-    json += ",";
-
-    json += "\"channel\":";
-    json += String(channel);
-    json += ",";
-
-    json += "\"secure\":";
-    json += secure ? "true" : "false";
-    json += ",";
-
-    json += "\"hidden\":";
-    json += hidden ? "true" : "false";
-
-    json += "}";
-
-    /*
-     * Give the ESP8266 background time between entries.
-     */
-    yield();
+    json += "\",\"rssi\":";
+    json += String(WiFi.RSSI(i));
+    json += ",\"channel\":";
+    json += String(WiFi.channel(i));
+    json += ",\"secure\":";
+    json += WiFi.encryptionType(i) != ENC_TYPE_NONE ? "true" : "false";
+    json += ",\"hidden\":";
+    json += hidden ? "true}" : "false}";
   }
 
   json += "]";
-
-  /*
-   * Free scan-result memory.
-   */
   WiFi.scanDelete();
-
-  return true;
+  return 1;
 }

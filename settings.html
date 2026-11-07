@@ -11,8 +11,11 @@
 <body>
   <main class="settings-shell">
     <header class="settings-header">
-      <a class="back-dashboard" href="/" aria-label="Back to dashboard">‹</a>
-      <div class="settings-heading"><small>ROOM AUTOMATION</small><strong>Settings</strong></div>
+      <button id="settingsBack" class="settings-nav-button" type="button" aria-label="Go back" title="Back">‹</button>
+      <div class="settings-heading"><small>ROOM AUTOMATION</small><strong id="settingsHeaderTitle">Settings</strong></div>
+      <a class="settings-home-button" href="/" aria-label="Go to dashboard" title="Home">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z"/></svg>
+      </a>
     </header>
 
     <section id="settingsHome" class="settings-home">
@@ -30,7 +33,7 @@
     </section>
 
     <section class="settings-panel" data-panel="logo">
-      <div class="panel-top"><button class="back-button" type="button" data-back aria-label="Back">‹</button><div class="panel-title"><small>APPEARANCE</small><h1>Custom logo</h1></div></div>
+      <div class="panel-top"><div class="panel-title"><small>APPEARANCE</small><h1>Custom logo</h1></div></div>
       <div class="panel-card">
         <h2>Dashboard logo text</h2><p class="help">The logo box automatically adjusts to the text. Maximum 255 characters.</p>
         <label class="field">Logo name<input id="logoText" type="text" maxlength="255" placeholder="My Smart Home" autocomplete="off"></label>
@@ -40,7 +43,7 @@
     </section>
 
     <section class="settings-panel" data-panel="relays">
-      <div class="panel-top"><button class="back-button" type="button" data-back aria-label="Back">‹</button><div class="panel-title"><small>HARDWARE</small><h1>Relay configuration</h1></div></div>
+      <div class="panel-top"><div class="panel-title"><small>HARDWARE</small><h1>Relay configuration</h1></div></div>
       <form id="relayForm">
         <div class="panel-card">
           <h2>Relay names and polarity</h2><p class="help">Select the correct trigger type separately for every relay module. The fixed output pins are D1, D2, D5 and D6.</p>
@@ -51,16 +54,13 @@
           <p class="form-note">Active-Low means the relay turns ON when its GPIO output is LOW. Active-High means it turns ON when the output is HIGH.</p>
         </div>
         <div class="panel-card">
-          <h2>Physical switch inputs</h2><p class="help">Switch input mapping is optional. Disabled by default until the physical wiring is checked.</p>
-          <div class="switch-config-row"><label class="field">Relay 1 switch GPIO<select id="switchPin0"><option value="-1">Disabled</option><option value="16">D0 · GPIO16</option><option value="0">D3 · GPIO0</option><option value="2">D4 · GPIO2</option><option value="15">D8 · GPIO15</option></select></label><label class="field">Switch type<select id="switchMode0"><option value="0">Momentary</option><option value="1">Maintained</option></select></label></div>
-          <label class="toggle-line"><input id="switchLow0" type="checkbox" checked> Relay 1 switch is Active-Low</label>
-          <div class="switch-config-row"><label class="field">Relay 2 switch GPIO<select id="switchPin1"><option value="-1">Disabled</option><option value="16">D0 · GPIO16</option><option value="0">D3 · GPIO0</option><option value="2">D4 · GPIO2</option><option value="15">D8 · GPIO15</option></select></label><label class="field">Switch type<select id="switchMode1"><option value="0">Momentary</option><option value="1">Maintained</option></select></label></div>
-          <label class="toggle-line"><input id="switchLow1" type="checkbox" checked> Relay 2 switch is Active-Low</label>
-          <div class="switch-config-row"><label class="field">Relay 3 switch GPIO<select id="switchPin2"><option value="-1">Disabled</option><option value="16">D0 · GPIO16</option><option value="0">D3 · GPIO0</option><option value="2">D4 · GPIO2</option><option value="15">D8 · GPIO15</option></select></label><label class="field">Switch type<select id="switchMode2"><option value="0">Momentary</option><option value="1">Maintained</option></select></label></div>
-          <label class="toggle-line"><input id="switchLow2" type="checkbox" checked> Relay 3 switch is Active-Low</label>
-          <div class="switch-config-row"><label class="field">Relay 4 switch GPIO<select id="switchPin3"><option value="-1">Disabled</option><option value="16">D0 · GPIO16</option><option value="0">D3 · GPIO0</option><option value="2">D4 · GPIO2</option><option value="15">D8 · GPIO15</option></select></label><label class="field">Switch type<select id="switchMode3"><option value="0">Momentary</option><option value="1">Maintained</option></select></label></div>
-          <label class="toggle-line"><input id="switchLow3" type="checkbox" checked> Relay 4 switch is Active-Low</label>
-          <div class="warning-note"><strong>Important:</strong> GPIO0 (D3), GPIO2 (D4) and GPIO15 (D8) are ESP8266 boot pins. Incorrect voltage during startup can prevent the board from booting. Never connect mains voltage directly to GPIO.</div>
+          <h2>Four physical wall-switch inputs</h2>
+          <p class="help">These four inputs are provided by a PCF8574 I/O-expander module. Each switch connects its assigned P pin to GND. Maintained mode: closed = relay ON and open = relay OFF (physical position overrides phone commands). Transition-follow mode: a closed transition commands ON and an open transition commands OFF; phone commands remain effective until the physical switch moves again.</p>
+          <div class="switch-config-row"><label class="field">Relay 1 input<select id="switchPin0"><option value="32">PCF8574 · P0</option><option value="-1">Disabled</option></select></label><label class="field">Switch action<select id="switchMode0"><option value="1">Maintained · closed = ON (physical priority)</option><option value="0">Follow contact on change (phone override)</option></select></label></div>
+          <div class="switch-config-row"><label class="field">Relay 2 input<select id="switchPin1"><option value="33">PCF8574 · P1</option><option value="-1">Disabled</option></select></label><label class="field">Switch action<select id="switchMode1"><option value="1">Maintained · closed = ON (physical priority)</option><option value="0">Follow contact on change (phone override)</option></select></label></div>
+          <div class="switch-config-row"><label class="field">Relay 3 input<select id="switchPin2"><option value="34">PCF8574 · P2</option><option value="-1">Disabled</option></select></label><label class="field">Switch action<select id="switchMode2"><option value="1">Maintained · closed = ON (physical priority)</option><option value="0">Follow contact on change (phone override)</option></select></label></div>
+          <div class="switch-config-row"><label class="field">Relay 4 input<select id="switchPin3"><option value="35">PCF8574 · P3</option><option value="-1">Disabled</option></select></label><label class="field">Switch action<select id="switchMode3"><option value="1">Maintained · closed = ON (physical priority)</option><option value="0">Follow contact on change (phone override)</option></select></label></div>
+          <div class="warning-note"><strong>Hardware required:</strong> Connect one PCF8574 module at I²C address 0x20, powered from 3.3V. Connect SDA to NodeMCU D3/GPIO0 and SCL to D4/GPIO2. Keep both I²C lines pulled up to 3.3V (typically 4.7kΩ). Connect each wall switch only between PCF8574 P0/P1/P2/P3 and GND. Do not connect wall switches directly to GPIO0/GPIO2; these are ESP8266 boot pins. Never connect mains voltage to the expander or ESP8266.</div>
         </div>
         <div class="settings-button-row"><button class="action-button" type="submit">Save relay configuration</button></div>
         <p id="relayMessage" class="message" role="status"></p>
@@ -68,7 +68,7 @@
     </section>
 
     <section class="settings-panel" data-panel="wifi">
-      <div class="panel-top"><button class="back-button" type="button" data-back aria-label="Back">‹</button><div class="panel-title"><small>CONNECTIVITY</small><h1>Wi-Fi configuration</h1></div></div>
+      <div class="panel-top"><div class="panel-title"><small>CONNECTIVITY</small><h1>Wi-Fi configuration</h1></div></div>
       <form id="wifiForm">
         <div class="panel-card">
           <h2>ESP8266 access point</h2><p class="help">Your phone can connect directly to this network for local control.</p>
@@ -93,7 +93,7 @@
     </section>
 
     <section class="settings-panel" data-panel="automation">
-      <div class="panel-top"><button class="back-button" type="button" data-back aria-label="Back">‹</button><div class="panel-title"><small>AUTOMATION</small><h1>Timers and schedules</h1></div></div>
+      <div class="panel-top"><div class="panel-title"><small>AUTOMATION</small><h1>Timers and schedules</h1></div></div>
       <div class="panel-card"><h2>Countdown timers</h2><p id="clockStatus" class="help">Checking device clock…</p>
         <div class="timer-grid">
           <div class="timer-box" data-timer="0"><strong id="timerName0">Relay 1</strong><span class="timer-status">No timer</span><label class="field">Hours<input class="timer-hours" type="number" min="0" max="720" value="0" inputmode="numeric"></label><label class="field">Minutes<input class="timer-minutes" type="number" min="0" max="59" value="1" inputmode="numeric"></label><label class="field">After countdown<select class="timer-action"><option value="false">Turn OFF</option><option value="true">Turn ON</option></select></label><div class="timer-actions"><button class="action-button timer-start" type="button">Start</button><button class="action-button secondary timer-cancel" type="button">Cancel</button></div></div>
@@ -116,7 +116,7 @@
     </section>
 
     <section class="settings-panel" data-panel="otapass">
-      <div class="panel-top"><button class="back-button" type="button" data-back aria-label="Back">‹</button><div class="panel-title"><small>SECURITY</small><h1>OTA password</h1></div></div>
+      <div class="panel-top"><div class="panel-title"><small>SECURITY</small><h1>OTA password</h1></div></div>
       <div class="panel-card"><h2>Set firmware update password</h2><p class="help">OTA remains disabled until a password is created. Use 8–64 characters. The saved password is never shown back on this page.</p>
         <label class="field">Current OTA password<input id="oldOta" type="password" maxlength="64" autocomplete="current-password"></label>
         <label class="field">New OTA password<input id="newOta" type="password" minlength="8" maxlength="64" autocomplete="new-password"></label>
@@ -126,7 +126,7 @@
     </section>
 
     <section class="settings-panel" data-panel="otaupdate">
-      <div class="panel-top"><button class="back-button" type="button" data-back aria-label="Back">‹</button><div class="panel-title"><small>MAINTENANCE</small><h1>OTA firmware update</h1></div></div>
+      <div class="panel-top"><div class="panel-title"><small>MAINTENANCE</small><h1>OTA firmware update</h1></div></div>
       <div class="panel-card"><h2>Install new firmware</h2><p class="help">Select firmware.bin built for this exact ESP8266 board. Do not upload littlefs.bin in this form.</p>
         <label class="field">OTA password<input id="otaUploadPassword" type="password" maxlength="64" autocomplete="current-password"></label>
         <label class="field">Firmware file<input id="firmware" type="file" accept=".bin,application/octet-stream"></label>
@@ -136,7 +136,7 @@
     </section>
 
     <section class="settings-panel" data-panel="remote">
-      <div class="panel-top"><button class="back-button" type="button" data-back aria-label="Back">‹</button><div class="panel-title"><small>NETWORK ACCESS</small><h1>Remote access</h1></div></div>
+      <div class="panel-top"><div class="panel-title"><small>NETWORK ACCESS</small><h1>Remote access</h1></div></div>
       <div class="panel-card"><div class="remote-status"><i></i><strong>Remote tunnel not configured</strong></div>
         <p class="help" style="margin-top:12px">The ESP8266 web server currently provides local-network access. It cannot safely create a public HTTPS tunnel by itself. Do not expose its HTTP port 80 directly to the internet.</p>
         <h2>Safe remote-access method</h2>
@@ -147,7 +147,7 @@
     </section>
 
     <section class="settings-panel" data-panel="system">
-      <div class="panel-top"><button class="back-button" type="button" data-back aria-label="Back">‹</button><div class="panel-title"><small>DEVICE</small><h1>System and recovery</h1></div></div>
+      <div class="panel-top"><div class="panel-title"><small>DEVICE</small><h1>System and recovery</h1></div></div>
       <div class="panel-card"><h2>Device status</h2><div class="field-grid"><div><p class="form-note">Firmware</p><strong id="systemVersion">—</strong></div><div><p class="form-note">Local access point</p><strong id="systemApIp">—</strong></div><div><p class="form-note">Home Wi-Fi</p><strong id="systemWifi">—</strong></div><div><p class="form-note">Free memory</p><strong id="systemHeap">—</strong></div></div></div>
       <div class="panel-card"><h2>Restart controller</h2><p class="help">Restart the ESP8266 without deleting its saved settings.</p><button id="rebootBtn" class="action-button secondary" type="button">Restart device</button><p id="systemMessage" class="message" role="status"></p></div>
       <div class="panel-card"><h2>Factory reset</h2><p class="help">Clears saved Wi-Fi credentials, relay settings, names, timers, schedules and OTA password.</p><button id="factoryBtn" class="action-button danger" type="button">Factory reset</button></div>
@@ -166,31 +166,48 @@ const api = async (url, options = {}) => {
 function message(id, text, ok = true) { const node = $(id); node.textContent = text || ''; node.classList.toggle('error', !ok); }
 const postJson = (url, body) => api(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 
-// The settings menu behaves like a compact slide-based app: one category is
-// visible at a time and every category has its own back control.
+// One persistent navigation bar: Back goes exactly one level up; Home
+// returns directly to the relay dashboard from every settings page.
+let activePanelName = null;
 function openPanel(name) {
   $('settingsHome').style.display = 'none';
   document.querySelectorAll('[data-panel]').forEach((panel) => {
-    panel.classList.remove('visible'); panel.style.display = 'none';
+    panel.classList.remove('visible');
+    panel.style.display = 'none';
   });
   const panel = document.querySelector(`[data-panel="${name}"]`);
   if (!panel) return;
+  activePanelName = name;
+  const title = panel.querySelector('.panel-title h1');
+  $('settingsHeaderTitle').textContent = title ? title.textContent : 'Settings';
   panel.style.display = 'block';
   requestAnimationFrame(() => panel.classList.add('visible'));
   if (name === 'automation') refreshAutomation();
   if (name === 'system') refreshSystem();
 }
-function showMenu() {
-  const current = document.querySelector('[data-panel].visible');
+function goBackOneLevel() {
+  if (!activePanelName) {
+    window.location.href = '/';
+    return;
+  }
+  const current = document.querySelector(`[data-panel="${activePanelName}"]`);
+  activePanelName = null;
   if (current) {
     current.classList.remove('visible');
     current.style.animation = 'slideOut .18s ease both';
-    window.setTimeout(() => { current.style.display = 'none'; current.style.animation = ''; $('settingsHome').style.display = 'block'; }, 170);
-  } else $('settingsHome').style.display = 'block';
+    window.setTimeout(() => {
+      current.style.display = 'none';
+      current.style.animation = '';
+      $('settingsHome').style.display = 'block';
+      $('settingsHeaderTitle').textContent = 'Settings';
+    }, 170);
+  } else {
+    $('settingsHome').style.display = 'block';
+    $('settingsHeaderTitle').textContent = 'Settings';
+  }
 }
+document.getElementById('settingsBack').addEventListener('click', goBackOneLevel);
 document.querySelectorAll('[data-open]').forEach((button) => button.addEventListener('click', () => openPanel(button.dataset.open)));
-document.querySelectorAll('[data-back]').forEach((button) => button.addEventListener('click', showMenu));
-
 let loaded = {};
 async function loadSettings() {
   loaded = await api('/api/settings');
@@ -204,18 +221,17 @@ async function loadSettings() {
     $(`relayName${i}`).value = loaded.relayNames?.[i] || `Relay ${i + 1}`;
     $(`relayPolarity${i}`).value = String(loaded.relayActiveLow?.[i] ?? true);
     $(`switchPin${i}`).value = String(loaded.switchPins?.[i] ?? -1);
-    $(`switchLow${i}`).checked = !!loaded.switchActiveLow?.[i];
-    $(`switchMode${i}`).value = String(loaded.switchMode?.[i] ?? 0);
+    $(`switchMode${i}`).value = String(loaded.switchMode?.[i] ?? 1);
   }
 }
 function settingsPayload() {
   const relayNames = [0,1,2,3].map(i => $(`relayName${i}`).value.trim());
   const relayActiveLow = [0,1,2,3].map(i => $(`relayPolarity${i}`).value === 'true');
   const switchPins = [0,1,2,3].map(i => Number($(`switchPin${i}`).value));
-  const switchActiveLow = [0,1,2,3].map(i => $(`switchLow${i}`).checked);
+  const switchActiveLow = [true, true, true, true];
   const switchMode = [0,1,2,3].map(i => Number($(`switchMode${i}`).value));
   if (relayNames.some((name) => !name || name.length > 23)) throw new Error('Each relay name must be 1 to 23 characters.');
-  if (new Set(switchPins.filter(pin => pin !== -1)).size !== switchPins.filter(pin => pin !== -1).length) throw new Error('A switch GPIO cannot be assigned more than once.');
+  if (new Set(switchPins.filter(pin => pin !== -1)).size !== switchPins.filter(pin => pin !== -1).length) throw new Error('A PCF8574 input cannot be assigned more than once.');
   return {
     logoText: $('logoText').value.trim() || 'Room Automation',
     apSsid: $('apSsid').value.trim(), apPassword: $('apPassword').value,
@@ -229,8 +245,10 @@ async function saveAllSettings(targetMessage) {
   message(targetMessage, data.message || 'Saved. Restarting device…');
 }
 $('saveLogo').addEventListener('click', async () => {
-  try { await saveAllSettings('logoMessage'); }
-  catch (error) { message('logoMessage', error.message, false); }
+  try {
+    const data = await postJson('/api/logo', { logoText: $('logoText').value.trim() });
+    message('logoMessage', data.message || 'Logo saved successfully.');
+  } catch (error) { message('logoMessage', error.message, false); }
 });
 $('relayForm').addEventListener('submit', async (event) => {
   event.preventDefault();
@@ -244,9 +262,18 @@ $('wifiForm').addEventListener('submit', async (event) => {
 });
 
 $('scanBtn').addEventListener('click', async () => {
-  const button = $('scanBtn'), box = $('scanList'); button.disabled = true; box.textContent = 'Scanning nearby 2.4 GHz networks…';
+  const button = $('scanBtn'), box = $('scanList');
+  button.disabled = true; box.textContent = 'Scanning nearby 2.4 GHz networks…';
   try {
-    const networks = await api('/api/wifi/scan'); box.replaceChildren();
+    await api('/api/wifi/scan');
+    let result = { scanning: true };
+    for (let attempt = 0; attempt < 45 && result.scanning; attempt += 1) {
+      await new Promise((resolve) => window.setTimeout(resolve, 400));
+      result = await api('/api/wifi/scan/result');
+    }
+    if (result.scanning) throw new Error('Wi-Fi scan timed out. Please try again.');
+    const networks = result.networks || [];
+    box.replaceChildren();
     if (!networks.length) { box.textContent = 'No networks found.'; return; }
     networks.forEach((network) => {
       const item = document.createElement('button'); item.type = 'button'; item.className = 'scan-item';
