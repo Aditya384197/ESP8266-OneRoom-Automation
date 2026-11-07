@@ -52,6 +52,8 @@ struct AutomationConfig {
   uint8_t switchActiveLow[4];
   uint8_t switchMode[4];     // 0 = momentary toggle, 1 = maintained input
   char relayName[4][24];
+  char logoText[256];
+  uint8_t relayActiveLow[4]; // 1 = Active-Low, 0 = Active-High
   RelayTimerConfig timers[4];
   ScheduleRule schedules[8];
   uint32_t crc32;

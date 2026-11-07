@@ -3,74 +3,49 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#0a1020">
+  <meta name="theme-color" content="#0b1422">
   <meta name="color-scheme" content="dark">
-  <meta name="description" content="Local four-channel smart room automation">
+  <meta name="description" content="Local four-channel room automation">
   <title>Room Automation</title>
   <link rel="stylesheet" href="/style.css">
 </head>
-<body>
-  <div class="ambient ambient-one"></div><div class="ambient ambient-two"></div>
-  <main class="shell">
-    <header class="topbar">
-      <a class="brand" href="/" aria-label="Room Automation home">
-        <span class="brand-icon">RA</span>
-        <span><small>ESP8266 · SMART ROOM</small><strong>Room Automation</strong></span>
-      </a>
-      <div class="top-actions">
-        <span id="connection" class="status offline"><i></i>Connecting</span>
-        <a class="icon-button" href="/settings.html" aria-label="Settings" title="Settings">⚙</a>
+<body class="dashboard-page">
+  <main class="dashboard-shell">
+    <header class="dashboard-header">
+      <div class="logo-stage">
+        <div class="logo-card" aria-label="Device logo"><span id="logoText">Room Automation</span></div>
+      </div>
+      <div class="header-actions">
+        <div id="connection" class="connection offline" role="status" aria-live="polite"><i></i><span>Offline</span></div>
+        <a class="settings-button" href="/settings.html" aria-label="Open settings" title="Settings">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.2a3.8 3.8 0 1 0 0 7.6 3.8 3.8 0 0 0 0-7.6Z"/><path d="m19.4 13.4 1.1.9-1.1 1.9-1.4-.5a7.8 7.8 0 0 1-1.4.8l-.2 1.5h-2.2l-.4-1.4a7.8 7.8 0 0 1-1.6 0l-.8 1.2-2-.9.3-1.5a7.7 7.7 0 0 1-1.1-1.2l-1.5.2-.7-2.1 1.2-.8a7.6 7.6 0 0 1-.1-1.6l-1.3-.7.8-2.1 1.5.2a7.7 7.7 0 0 1 1.2-1.1l-.2-1.5 2.1-.7.8 1.2a7.6 7.6 0 0 1 1.6-.1l.7-1.3 2.1.8-.2 1.5a7.7 7.7 0 0 1 1.1 1.2l1.5-.2.7 2.1-1.2.8a7.6 7.6 0 0 1 .1 1.6l1.3.7-.8 2.1-1.5-.2Z"/></svg>
+        </a>
       </div>
     </header>
 
-    <section class="hero glass">
-      <div class="hero-copy">
-        <span class="eyebrow">CONTROL CENTER</span>
-        <h1>Your space.<br><em>Under control.</em></h1>
-        <p>Local-first automation. Relay controls and physical switches continue working without cloud or internet access.</p>
-        <div class="hero-foot"><span class="live-indicator"><i></i> LIVE DEVICE STATUS</span><span id="version">Firmware —</span></div>
-      </div>
-      <div class="hero-orbit" aria-hidden="true"><div class="orbit-ring ring-a"></div><div class="orbit-ring ring-b"></div><div class="orbit-core"><span>4</span><small>CHANNELS</small></div><b class="orbit-dot dot-a"></b><b class="orbit-dot dot-b"></b><b class="orbit-dot dot-c"></b></div>
+    <section id="relayGrid" class="relay-grid" aria-label="Relay controls">
+      <button class="relay-card" type="button" data-index="0" aria-pressed="false">
+        <span class="relay-top"><span class="relay-index">01</span><span class="relay-glyph" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3v8m-5.7-5.7a8 8 0 1 0 11.4 0"/></svg></span></span>
+        <span class="relay-name" data-relay-name="0">Ceiling Fan</span>
+        <span class="relay-bottom"><span class="relay-caption">RELAY 1</span><span class="relay-state">OFF</span></span>
+      </button>
+      <button class="relay-card" type="button" data-index="1" aria-pressed="false">
+        <span class="relay-top"><span class="relay-index">02</span><span class="relay-glyph" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 3v6m8-6v6M6 9h12v3a6 6 0 0 1-12 0V9Zm6 9v3"/></svg></span></span>
+        <span class="relay-name" data-relay-name="1">Charging Socket</span>
+        <span class="relay-bottom"><span class="relay-caption">RELAY 2</span><span class="relay-state">OFF</span></span>
+      </button>
+      <button class="relay-card" type="button" data-index="2" aria-pressed="false">
+        <span class="relay-top"><span class="relay-index">03</span><span class="relay-glyph" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 18h6m-5 3h4m-2-19a7 7 0 0 0-4 12.7c.6.4 1 1 1 1.8h6c0-.8.4-1.4 1-1.8A7 7 0 0 0 12 2Z"/></svg></span></span>
+        <span class="relay-name" data-relay-name="2">LED 1</span>
+        <span class="relay-bottom"><span class="relay-caption">RELAY 3</span><span class="relay-state">OFF</span></span>
+      </button>
+      <button class="relay-card" type="button" data-index="3" aria-pressed="false">
+        <span class="relay-top"><span class="relay-index">04</span><span class="relay-glyph" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 18h6m-5 3h4m-2-19a7 7 0 0 0-4 12.7c.6.4 1 1 1 1.8h6c0-.8.4-1.4 1-1.8A7 7 0 0 0 12 2Z"/></svg></span></span>
+        <span class="relay-name" data-relay-name="3">LED 2</span>
+        <span class="relay-bottom"><span class="relay-caption">RELAY 4</span><span class="relay-state">OFF</span></span>
+      </button>
     </section>
-
-    <section class="section-heading">
-      <div><span class="eyebrow">APPLIANCES</span><h2>Relay control</h2></div>
-      <span class="section-note">GPIO map · D1 / D2 / D5 / D6</span>
-    </section>
-    <section id="relayGrid" class="relay-grid">
-      <article class="relay-card glass" data-index="0"><div class="relay-head"><span class="appliance-icon">⌁</span><span class="relay-tag">RELAY 01 · GPIO5</span></div><div class="relay-details"><h3 data-relay-name="0">Ceiling Fan</h3><p>Relay 1 · D1 output</p></div><div class="relay-actions"><span class="relay-state">OFF</span><button class="power-button" data-toggle="0" aria-pressed="false"><span></span>Power</button></div></article>
-      <article class="relay-card glass" data-index="1"><div class="relay-head"><span class="appliance-icon">＋</span><span class="relay-tag">RELAY 02 · GPIO4</span></div><div class="relay-details"><h3 data-relay-name="1">Charging Socket</h3><p>Relay 2 · D2 output</p></div><div class="relay-actions"><span class="relay-state">OFF</span><button class="power-button" data-toggle="1" aria-pressed="false"><span></span>Power</button></div></article>
-      <article class="relay-card glass" data-index="2"><div class="relay-head"><span class="appliance-icon light">✦</span><span class="relay-tag">RELAY 03 · GPIO14</span></div><div class="relay-details"><h3 data-relay-name="2">LED 1</h3><p>Relay 3 · D5 output</p></div><div class="relay-actions"><span class="relay-state">OFF</span><button class="power-button" data-toggle="2" aria-pressed="false"><span></span>Power</button></div></article>
-      <article class="relay-card glass" data-index="3"><div class="relay-head"><span class="appliance-icon light">✦</span><span class="relay-tag">RELAY 04 · GPIO12</span></div><div class="relay-details"><h3 data-relay-name="3">LED 2</h3><p>Relay 4 · D6 output</p></div><div class="relay-actions"><span class="relay-state">OFF</span><button class="power-button" data-toggle="3" aria-pressed="false"><span></span>Power</button></div></article>
-    </section>
-
-    <section class="section-heading section-gap"><div><span class="eyebrow">AUTOMATION</span><h2>Countdown timers</h2></div><span id="clockStatus" class="section-note">Checking clock…</span></section>
-    <section id="timerGrid" class="timer-grid">
-      <article class="timer-card glass" data-timer="0"><div class="timer-top"><strong>Relay 1</strong><span class="timer-remaining">No timer</span></div><div class="timer-controls"><input class="timer-seconds" type="number" min="1" max="2592000" inputmode="numeric" placeholder="Seconds"><select class="timer-action"><option value="false">Turn OFF after</option><option value="true">Turn ON after</option></select></div><div class="timer-buttons"><button class="button primary timer-start">Start timer</button><button class="button subtle timer-cancel">Cancel</button></div></article>
-      <article class="timer-card glass" data-timer="1"><div class="timer-top"><strong>Relay 2</strong><span class="timer-remaining">No timer</span></div><div class="timer-controls"><input class="timer-seconds" type="number" min="1" max="2592000" inputmode="numeric" placeholder="Seconds"><select class="timer-action"><option value="false">Turn OFF after</option><option value="true">Turn ON after</option></select></div><div class="timer-buttons"><button class="button primary timer-start">Start timer</button><button class="button subtle timer-cancel">Cancel</button></div></article>
-      <article class="timer-card glass" data-timer="2"><div class="timer-top"><strong>Relay 3</strong><span class="timer-remaining">No timer</span></div><div class="timer-controls"><input class="timer-seconds" type="number" min="1" max="2592000" inputmode="numeric" placeholder="Seconds"><select class="timer-action"><option value="false">Turn OFF after</option><option value="true">Turn ON after</option></select></div><div class="timer-buttons"><button class="button primary timer-start">Start timer</button><button class="button subtle timer-cancel">Cancel</button></div></article>
-      <article class="timer-card glass" data-timer="3"><div class="timer-top"><strong>Relay 4</strong><span class="timer-remaining">No timer</span></div><div class="timer-controls"><input class="timer-seconds" type="number" min="1" max="2592000" inputmode="numeric" placeholder="Seconds"><select class="timer-action"><option value="false">Turn OFF after</option><option value="true">Turn ON after</option></select></div><div class="timer-buttons"><button class="button primary timer-start">Start timer</button><button class="button subtle timer-cancel">Cancel</button></div></article>
-    </section>
-
-    <section class="section-heading section-gap"><div><span class="eyebrow">WEEKLY ROUTINES</span><h2>Schedules</h2></div><span class="section-note">Up to 8 rules · India time</span></section>
-    <section class="schedule-layout">
-      <form id="scheduleForm" class="schedule-form glass">
-        <div class="form-title"><span class="eyebrow">NEW AUTOMATION</span><strong>Create a schedule</strong></div>
-        <label>Appliance<select id="scheduleRelay"><option value="0">Relay 1</option><option value="1">Relay 2</option><option value="2">Relay 3</option><option value="3">Relay 4</option></select></label>
-        <label>Action<select id="scheduleAction"><option value="true">Turn ON</option><option value="false">Turn OFF</option></select></label>
-        <label>Time<input id="scheduleTime" type="time" value="07:00" required></label>
-        <div class="day-picker"><span>Repeat on</span><div class="days"><label><input type="checkbox" value="0" checked><b>S</b></label><label><input type="checkbox" value="1" checked><b>M</b></label><label><input type="checkbox" value="2" checked><b>T</b></label><label><input type="checkbox" value="3" checked><b>W</b></label><label><input type="checkbox" value="4" checked><b>T</b></label><label><input type="checkbox" value="5" checked><b>F</b></label><label><input type="checkbox" value="6" checked><b>S</b></label></div></div>
-        <button class="button primary full" type="submit">＋ Save schedule</button>
-      </form>
-      <div class="schedule-list glass"><div class="form-title"><span class="eyebrow">ACTIVE RULES</span><strong>Your schedules</strong></div><div id="scheduleItems" class="schedule-items"><p class="empty-note">No schedules configured.</p></div><p class="schedule-help">Schedules require a valid NTP clock. They run locally on the ESP8266 after time synchronization; they do not depend on Firebase.</p></div>
-    </section>
-
-    <section class="section-heading section-gap"><div><span class="eyebrow">DEVICE HEALTH</span><h2>System overview</h2></div></section>
-    <section class="metrics-grid">
-      <div class="metric glass"><span>STA ADDRESS</span><strong id="ip">—</strong></div><div class="metric glass"><span>AP ADDRESS</span><strong id="apIp">—</strong></div><div class="metric glass"><span>WI-FI SIGNAL</span><strong id="rssi">—</strong></div><div class="metric glass"><span>FREE HEAP</span><strong id="heap">—</strong></div><div class="metric glass"><span>UPTIME</span><strong id="uptime">—</strong></div><div class="metric glass"><span>AP CLIENTS</span><strong id="apClients">—</strong></div>
-    </section>
-    <div class="footer-bar"><span id="message" class="toast" role="status" aria-live="polite"></span><button id="rebootBtn" class="button subtle">↻ Reboot controller</button></div>
-    <footer>Local-first controller · AP fallback always available · Relay state stored on device</footer>
+    <p id="dashboardMessage" class="dashboard-message" role="status" aria-live="polite"></p>
   </main>
   <script src="/app.js"></script>
 </body>

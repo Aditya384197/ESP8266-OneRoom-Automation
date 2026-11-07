@@ -1,146 +1,376 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#0a1020"><meta name="color-scheme" content="dark">
-  <title>Settings · Room Automation</title><link rel="stylesheet" href="/style.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0b1422">
+  <meta name="color-scheme" content="dark">
+  <title>Settings · Room Automation</title>
+  <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <div class="ambient ambient-one"></div><div class="ambient ambient-two"></div>
-  <main class="shell">
-    <header class="topbar"><a class="brand" href="/"><span class="brand-icon">RA</span><span><small>CONTROLLER CONFIGURATION</small><strong>Device settings</strong></span></a><a class="button subtle" href="/">← Dashboard</a></header>
-    <section class="settings-intro glass"><span class="eyebrow">SYSTEM PREFERENCES</span><h1>Make it yours.</h1><p>Changes are validated and stored on the controller. Network and switch-pin changes are applied after a controlled reboot.</p></section>
+  <main class="settings-shell">
+    <header class="settings-header">
+      <a class="back-dashboard" href="/" aria-label="Back to dashboard">‹</a>
+      <div class="settings-heading"><small>ROOM AUTOMATION</small><strong>Settings</strong></div>
+    </header>
 
-    <form id="settingsForm" class="settings-grid">
-      <section class="settings-card glass"><div class="form-title"><span class="eyebrow">NETWORK · ACCESS POINT</span><strong>ESP8266 Wi-Fi</strong></div>
-        <label>Access Point name<input id="apSsid" maxlength="32" required></label>
-        <label>Access Point password<input id="apPassword" type="password" maxlength="63" autocomplete="new-password" placeholder="Leave blank to keep current"></label>
-        <label>Wi-Fi channel<select id="apChannel"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="11">11</option><option value="12">12</option><option value="13">13</option></select></label>
-        <div class="form-note">AP fallback remains active even when the home router or internet is unavailable.</div>
-      </section>
-      <section class="settings-card glass"><div class="form-title"><span class="eyebrow">NETWORK · STATION</span><strong>Home router</strong></div>
-        <label>Home Wi-Fi SSID<input id="staSsid" maxlength="32" autocomplete="off" placeholder="Select or type a 2.4 GHz network"></label>
-        <label>Home Wi-Fi password<input id="staPassword" type="password" maxlength="64" autocomplete="new-password" placeholder="Blank keeps password only for same SSID"></label>
-        <button id="scanBtn" type="button" class="button subtle">⌕ Scan nearby networks</button>
-        <div id="scanList" class="scan-list"></div>
-      </section>
-      <section class="settings-card glass"><div class="form-title"><span class="eyebrow">DEVICE IDENTITY</span><strong>Relay configuration</strong></div>
-        <label>Device name<input id="deviceName" maxlength="32" required></label>
-        <label class="toggle-row"><input id="activeLow" type="checkbox"><span><strong>Active-Low relay module</strong><small>Unchecked uses Active-High logic.</small></span></label>
-        <div class="relay-name-list">
-          <label>Relay 1 · D1 / GPIO5<input id="relayName0" maxlength="23" required></label>
-          <label>Relay 2 · D2 / GPIO4<input id="relayName1" maxlength="23" required></label>
-          <label>Relay 3 · D5 / GPIO14<input id="relayName2" maxlength="23" required></label>
-          <label>Relay 4 · D6 / GPIO12<input id="relayName3" maxlength="23" required></label>
+    <section id="settingsHome" class="settings-home">
+      <div class="settings-menu" aria-label="Settings options">
+        <button class="settings-menu-item" type="button" data-open="logo"><span class="menu-icon">✧</span><span class="menu-copy"><strong>Custom logo</strong><small>Change the name shown above the relay panel</small></span><span class="menu-arrow">›</span></button>
+        <button class="settings-menu-item" type="button" data-open="relays"><span class="menu-icon">▦</span><span class="menu-copy"><strong>Relay configuration</strong><small>Names, GPIO map and Active-High / Active-Low</small></span><span class="menu-arrow">›</span></button>
+        <button class="settings-menu-item" type="button" data-open="wifi"><span class="menu-icon">⌁</span><span class="menu-copy"><strong>Wi-Fi configuration</strong><small>Device access point and home Wi-Fi</small></span><span class="menu-arrow">›</span></button>
+        <button class="settings-menu-item" type="button" data-open="automation"><span class="menu-icon">◷</span><span class="menu-copy"><strong>Timers and schedules</strong><small>Countdowns and weekly automation rules</small></span><span class="menu-arrow">›</span></button>
+        <button class="settings-menu-item" type="button" data-open="otapass"><span class="menu-icon">⌑</span><span class="menu-copy"><strong>OTA password</strong><small>Create or change firmware-update password</small></span><span class="menu-arrow">›</span></button>
+        <button class="settings-menu-item" type="button" data-open="otaupdate"><span class="menu-icon">⇧</span><span class="menu-copy"><strong>OTA firmware update</strong><small>Upload a firmware .bin file from this phone</small></span><span class="menu-arrow">›</span></button>
+        <button class="settings-menu-item" type="button" data-open="remote"><span class="menu-icon">◎</span><span class="menu-copy"><strong>Remote access</strong><small>Secure remote-access requirements and setup</small></span><span class="menu-arrow">›</span></button>
+        <button class="settings-menu-item" type="button" data-open="system"><span class="menu-icon">⚙</span><span class="menu-copy"><strong>System and recovery</strong><small>Device information, restart and factory reset</small></span><span class="menu-arrow">›</span></button>
+      </div>
+      <p class="settings-footer">Local control keeps working without internet. Network and cloud features are optional.</p>
+    </section>
+
+    <section class="settings-panel" data-panel="logo">
+      <div class="panel-top"><button class="back-button" type="button" data-back aria-label="Back">‹</button><div class="panel-title"><small>APPEARANCE</small><h1>Custom logo</h1></div></div>
+      <div class="panel-card">
+        <h2>Dashboard logo text</h2><p class="help">The logo box automatically adjusts to the text. Maximum 255 characters.</p>
+        <label class="field">Logo name<input id="logoText" type="text" maxlength="255" placeholder="My Smart Home" autocomplete="off"></label>
+        <div class="settings-button-row"><button class="action-button" type="button" id="saveLogo">Save logo</button></div>
+        <p id="logoMessage" class="message" role="status"></p>
+      </div>
+    </section>
+
+    <section class="settings-panel" data-panel="relays">
+      <div class="panel-top"><button class="back-button" type="button" data-back aria-label="Back">‹</button><div class="panel-title"><small>HARDWARE</small><h1>Relay configuration</h1></div></div>
+      <form id="relayForm">
+        <div class="panel-card">
+          <h2>Relay names and polarity</h2><p class="help">Select the correct trigger type separately for every relay module. The fixed output pins are D1, D2, D5 and D6.</p>
+          <div class="relay-config-row"><strong class="relay-config-name">Relay 1 · D1 · GPIO5</strong><label class="field">Display name<input id="relayName0" type="text" maxlength="23" required></label><label class="field">Trigger type<select id="relayPolarity0"><option value="true">Active-Low</option><option value="false">Active-High</option></select></label></div>
+          <div class="relay-config-row"><strong class="relay-config-name">Relay 2 · D2 · GPIO4</strong><label class="field">Display name<input id="relayName1" type="text" maxlength="23" required></label><label class="field">Trigger type<select id="relayPolarity1"><option value="true">Active-Low</option><option value="false">Active-High</option></select></label></div>
+          <div class="relay-config-row"><strong class="relay-config-name">Relay 3 · D5 · GPIO14</strong><label class="field">Display name<input id="relayName2" type="text" maxlength="23" required></label><label class="field">Trigger type<select id="relayPolarity2"><option value="true">Active-Low</option><option value="false">Active-High</option></select></label></div>
+          <div class="relay-config-row"><strong class="relay-config-name">Relay 4 · D6 · GPIO12</strong><label class="field">Display name<input id="relayName3" type="text" maxlength="23" required></label><label class="field">Trigger type<select id="relayPolarity3"><option value="true">Active-Low</option><option value="false">Active-High</option></select></label></div>
+          <p class="form-note">Active-Low means the relay turns ON when its GPIO output is LOW. Active-High means it turns ON when the output is HIGH.</p>
         </div>
-      </section>
-      <section class="settings-card glass"><div class="form-title"><span class="eyebrow">PHYSICAL INPUTS</span><strong>Switch GPIO mapping</strong></div>
-        <p class="form-note">Choose one unique input pin per switch. “Disabled” ignores that physical switch.</p>
-        <p class="form-note">All four inputs start disabled until you confirm your physical wiring. GPIO0/D3 and GPIO2/D4 must stay HIGH at reset; GPIO15/D8 must stay LOW. GPIO16/D0 requires an external pull-up resistor.</p>
-        <div class="switch-map">
-          <div class="switch-row"><label for="switchPin0">Relay 1 switch</label><select id="switchPin0"><option value="-1">Disabled</option><option value="16">D0 · GPIO16</option><option value="0">D3 · GPIO0</option><option value="2">D4 · GPIO2</option><option value="15">D8 · GPIO15</option></select><select id="switchMode0" aria-label="Switch 1 mode"><option value="0">Momentary</option><option value="1">Maintained</option></select><label class="mini-toggle"><input id="switchLow0" type="checkbox" checked> Active-Low</label></div>
-          <div class="switch-row"><label for="switchPin1">Relay 2 switch</label><select id="switchPin1"><option value="-1">Disabled</option><option value="16">D0 · GPIO16</option><option value="0">D3 · GPIO0</option><option value="2">D4 · GPIO2</option><option value="15">D8 · GPIO15</option></select><select id="switchMode1" aria-label="Switch 2 mode"><option value="0">Momentary</option><option value="1">Maintained</option></select><label class="mini-toggle"><input id="switchLow1" type="checkbox" checked> Active-Low</label></div>
-          <div class="switch-row"><label for="switchPin2">Relay 3 switch</label><select id="switchPin2"><option value="-1">Disabled</option><option value="16">D0 · GPIO16</option><option value="0">D3 · GPIO0</option><option value="2">D4 · GPIO2</option><option value="15">D8 · GPIO15</option></select><select id="switchMode2" aria-label="Switch 3 mode"><option value="0">Momentary</option><option value="1">Maintained</option></select><label class="mini-toggle"><input id="switchLow2" type="checkbox" checked> Active-Low</label></div>
-          <div class="switch-row"><label for="switchPin3">Relay 4 switch</label><select id="switchPin3"><option value="-1">Disabled</option><option value="16">D0 · GPIO16</option><option value="0">D3 · GPIO0</option><option value="2">D4 · GPIO2</option><option value="15">D8 · GPIO15</option></select><select id="switchMode3" aria-label="Switch 4 mode"><option value="0">Momentary</option><option value="1">Maintained</option></select><label class="mini-toggle"><input id="switchLow3" type="checkbox"> Active-Low</label></div>
+        <div class="panel-card">
+          <h2>Physical switch inputs</h2><p class="help">Switch input mapping is optional. Disabled by default until the physical wiring is checked.</p>
+          <div class="switch-config-row"><label class="field">Relay 1 switch GPIO<select id="switchPin0"><option value="-1">Disabled</option><option value="16">D0 · GPIO16</option><option value="0">D3 · GPIO0</option><option value="2">D4 · GPIO2</option><option value="15">D8 · GPIO15</option></select></label><label class="field">Switch type<select id="switchMode0"><option value="0">Momentary</option><option value="1">Maintained</option></select></label></div>
+          <label class="toggle-line"><input id="switchLow0" type="checkbox" checked> Relay 1 switch is Active-Low</label>
+          <div class="switch-config-row"><label class="field">Relay 2 switch GPIO<select id="switchPin1"><option value="-1">Disabled</option><option value="16">D0 · GPIO16</option><option value="0">D3 · GPIO0</option><option value="2">D4 · GPIO2</option><option value="15">D8 · GPIO15</option></select></label><label class="field">Switch type<select id="switchMode1"><option value="0">Momentary</option><option value="1">Maintained</option></select></label></div>
+          <label class="toggle-line"><input id="switchLow1" type="checkbox" checked> Relay 2 switch is Active-Low</label>
+          <div class="switch-config-row"><label class="field">Relay 3 switch GPIO<select id="switchPin2"><option value="-1">Disabled</option><option value="16">D0 · GPIO16</option><option value="0">D3 · GPIO0</option><option value="2">D4 · GPIO2</option><option value="15">D8 · GPIO15</option></select></label><label class="field">Switch type<select id="switchMode2"><option value="0">Momentary</option><option value="1">Maintained</option></select></label></div>
+          <label class="toggle-line"><input id="switchLow2" type="checkbox" checked> Relay 3 switch is Active-Low</label>
+          <div class="switch-config-row"><label class="field">Relay 4 switch GPIO<select id="switchPin3"><option value="-1">Disabled</option><option value="16">D0 · GPIO16</option><option value="0">D3 · GPIO0</option><option value="2">D4 · GPIO2</option><option value="15">D8 · GPIO15</option></select></label><label class="field">Switch type<select id="switchMode3"><option value="0">Momentary</option><option value="1">Maintained</option></select></label></div>
+          <label class="toggle-line"><input id="switchLow3" type="checkbox" checked> Relay 4 switch is Active-Low</label>
+          <div class="warning-note"><strong>Important:</strong> GPIO0 (D3), GPIO2 (D4) and GPIO15 (D8) are ESP8266 boot pins. Incorrect voltage during startup can prevent the board from booting. Never connect mains voltage directly to GPIO.</div>
         </div>
-        <div class="warning-note"><strong>Boot safety warning:</strong> GPIO0 (D3), GPIO2 (D4) and GPIO15 (D8) are ESP8266 boot-strap pins. Their electrical level at reset matters. Do not hold switches on these pins while powering up or resetting the board. For a fail-safe four-switch installation, use an external GPIO expander or a dedicated switch interface.</div>
-      </section>
-      <section class="settings-card glass"><div class="form-title"><span class="eyebrow">SECURITY</span><strong>OTA credentials</strong></div>
-        <p class="form-note">On first setup, leave the current password blank and create one. OTA is disabled until a password is configured.</p>
-        <label>Current OTA password<input id="oldOta" type="password" maxlength="64" autocomplete="current-password"></label>
-        <label>New OTA password<input id="newOta" type="password" minlength="8" maxlength="64" autocomplete="new-password"></label>
-        <label>Confirm new password<input id="confirmOta" type="password" minlength="8" maxlength="64" autocomplete="new-password"></label>
-        <button id="otaPassBtn" type="button" class="button primary">Update OTA password</button>
-      </section>
-      <section class="settings-card glass"><div class="form-title"><span class="eyebrow">FIRMWARE MAINTENANCE</span><strong>OTA update</strong></div>
-        <div id="otaForm"><label>OTA password<input id="otaUploadPassword" type="password" maxlength="64" autocomplete="current-password" required></label><label>Firmware binary<input id="firmware" type="file" accept=".bin,application/octet-stream" required></label><button id="otaUploadBtn" type="button" class="button primary">Upload firmware</button></div>
-        <progress id="otaProgress" max="100" value="0" hidden></progress><p id="otaStatus" class="form-note"></p>
-      </section>
-      <section class="settings-card glass danger-card"><div class="form-title"><span class="eyebrow">RECOVERY</span><strong>Factory reset</strong></div>
-        <p class="form-note">Clears Wi-Fi settings, relay state, names, switch mapping, timers and schedules. Hold D7 / GPIO13 for 10 seconds to reset using the hardware button.</p>
-        <button id="factoryBtn" type="button" class="button danger">Factory reset device</button>
-      </section>
-      <div class="settings-save"><p id="settingsMessage" class="toast" role="status" aria-live="polite"></p><button id="saveBtn" type="submit" class="button primary">Save settings & reboot</button></div>
-    </form>
-    <footer>Local configuration stays on the ESP8266 · Wi-Fi passwords are never sent back to the browser</footer>
+        <div class="settings-button-row"><button class="action-button" type="submit">Save relay configuration</button></div>
+        <p id="relayMessage" class="message" role="status"></p>
+      </form>
+    </section>
+
+    <section class="settings-panel" data-panel="wifi">
+      <div class="panel-top"><button class="back-button" type="button" data-back aria-label="Back">‹</button><div class="panel-title"><small>CONNECTIVITY</small><h1>Wi-Fi configuration</h1></div></div>
+      <form id="wifiForm">
+        <div class="panel-card">
+          <h2>ESP8266 access point</h2><p class="help">Your phone can connect directly to this network for local control.</p>
+          <label class="field">Access point name (SSID)<input id="apSsid" type="text" maxlength="32" required></label>
+          <label class="field">New access point password<input id="apPassword" type="password" maxlength="63" placeholder="Leave blank to keep current" autocomplete="new-password"></label>
+          <label class="field">Wi-Fi channel<select id="apChannel"><option value="1">Channel 1</option><option value="2">Channel 2</option><option value="3">Channel 3</option><option value="4">Channel 4</option><option value="5">Channel 5</option><option value="6">Channel 6</option><option value="7">Channel 7</option><option value="8">Channel 8</option><option value="9">Channel 9</option><option value="10">Channel 10</option><option value="11">Channel 11</option><option value="12">Channel 12</option><option value="13">Channel 13</option></select></label>
+        </div>
+        <div class="panel-card">
+          <h2>Connect to home Wi-Fi</h2><p class="help">When connected, the status on the main dashboard will turn green and show Online.</p>
+          <div class="settings-button-row"><button id="scanBtn" class="action-button secondary" type="button">Scan nearby networks</button></div><div id="scanList" class="scan-list"></div>
+          <label class="field">Home Wi-Fi name (SSID)<input id="staSsid" type="text" maxlength="32" autocomplete="off"></label>
+          <label class="field">Home Wi-Fi password<input id="staPassword" type="password" maxlength="64" placeholder="Leave blank to keep current" autocomplete="new-password"></label>
+        </div>
+        <div class="panel-card">
+          <h2>Device network name</h2>
+          <label class="field">Hostname<input id="deviceName" type="text" maxlength="32" required></label>
+          <p class="form-note">Use English letters, numbers and hyphens only. Example: room-automation</p>
+        </div>
+        <div class="settings-button-row"><button class="action-button" type="submit">Save Wi-Fi settings</button></div>
+        <p id="wifiMessage" class="message" role="status"></p>
+      </form>
+    </section>
+
+    <section class="settings-panel" data-panel="automation">
+      <div class="panel-top"><button class="back-button" type="button" data-back aria-label="Back">‹</button><div class="panel-title"><small>AUTOMATION</small><h1>Timers and schedules</h1></div></div>
+      <div class="panel-card"><h2>Countdown timers</h2><p id="clockStatus" class="help">Checking device clock…</p>
+        <div class="timer-grid">
+          <div class="timer-box" data-timer="0"><strong id="timerName0">Relay 1</strong><span class="timer-status">No timer</span><label class="field">Hours<input class="timer-hours" type="number" min="0" max="720" value="0" inputmode="numeric"></label><label class="field">Minutes<input class="timer-minutes" type="number" min="0" max="59" value="1" inputmode="numeric"></label><label class="field">After countdown<select class="timer-action"><option value="false">Turn OFF</option><option value="true">Turn ON</option></select></label><div class="timer-actions"><button class="action-button timer-start" type="button">Start</button><button class="action-button secondary timer-cancel" type="button">Cancel</button></div></div>
+          <div class="timer-box" data-timer="1"><strong id="timerName1">Relay 2</strong><span class="timer-status">No timer</span><label class="field">Hours<input class="timer-hours" type="number" min="0" max="720" value="0" inputmode="numeric"></label><label class="field">Minutes<input class="timer-minutes" type="number" min="0" max="59" value="1" inputmode="numeric"></label><label class="field">After countdown<select class="timer-action"><option value="false">Turn OFF</option><option value="true">Turn ON</option></select></label><div class="timer-actions"><button class="action-button timer-start" type="button">Start</button><button class="action-button secondary timer-cancel" type="button">Cancel</button></div></div>
+          <div class="timer-box" data-timer="2"><strong id="timerName2">Relay 3</strong><span class="timer-status">No timer</span><label class="field">Hours<input class="timer-hours" type="number" min="0" max="720" value="0" inputmode="numeric"></label><label class="field">Minutes<input class="timer-minutes" type="number" min="0" max="59" value="1" inputmode="numeric"></label><label class="field">After countdown<select class="timer-action"><option value="false">Turn OFF</option><option value="true">Turn ON</option></select></label><div class="timer-actions"><button class="action-button timer-start" type="button">Start</button><button class="action-button secondary timer-cancel" type="button">Cancel</button></div></div>
+          <div class="timer-box" data-timer="3"><strong id="timerName3">Relay 4</strong><span class="timer-status">No timer</span><label class="field">Hours<input class="timer-hours" type="number" min="0" max="720" value="0" inputmode="numeric"></label><label class="field">Minutes<input class="timer-minutes" type="number" min="0" max="59" value="1" inputmode="numeric"></label><label class="field">After countdown<select class="timer-action"><option value="false">Turn OFF</option><option value="true">Turn ON</option></select></label><div class="timer-actions"><button class="action-button timer-start" type="button">Start</button><button class="action-button secondary timer-cancel" type="button">Cancel</button></div></div>
+        </div>
+      </div>
+      <div class="panel-card"><h2>Weekly schedules</h2><p class="help">Up to 8 rules. Schedules run locally and require the device clock to sync while connected to Wi-Fi with internet.</p>
+        <form id="scheduleForm">
+          <label class="field">Relay<select id="scheduleRelay"><option value="0">Relay 1</option><option value="1">Relay 2</option><option value="2">Relay 3</option><option value="3">Relay 4</option></select></label>
+          <label class="field">Action<select id="scheduleAction"><option value="true">Turn ON</option><option value="false">Turn OFF</option></select></label>
+          <label class="field">Time<input id="scheduleTime" type="time" value="07:00" required></label>
+          <div class="field">Repeat days<div class="schedule-days"><label><input type="checkbox" value="0" checked>Sun</label><label><input type="checkbox" value="1" checked>Mon</label><label><input type="checkbox" value="2" checked>Tue</label><label><input type="checkbox" value="3" checked>Wed</label><label><input type="checkbox" value="4" checked>Thu</label><label><input type="checkbox" value="5" checked>Fri</label><label><input type="checkbox" value="6" checked>Sat</label></div></div>
+          <div class="settings-button-row"><button class="action-button" type="submit">Save weekly schedule</button></div>
+        </form>
+        <div id="scheduleItems" class="schedule-items"><p class="form-note">No schedules set.</p></div>
+        <p id="automationMessage" class="message" role="status"></p>
+      </div>
+    </section>
+
+    <section class="settings-panel" data-panel="otapass">
+      <div class="panel-top"><button class="back-button" type="button" data-back aria-label="Back">‹</button><div class="panel-title"><small>SECURITY</small><h1>OTA password</h1></div></div>
+      <div class="panel-card"><h2>Set firmware update password</h2><p class="help">OTA remains disabled until a password is created. Use 8–64 characters. The saved password is never shown back on this page.</p>
+        <label class="field">Current OTA password<input id="oldOta" type="password" maxlength="64" autocomplete="current-password"></label>
+        <label class="field">New OTA password<input id="newOta" type="password" minlength="8" maxlength="64" autocomplete="new-password"></label>
+        <label class="field">Confirm new password<input id="confirmOta" type="password" minlength="8" maxlength="64" autocomplete="new-password"></label>
+        <div class="settings-button-row"><button id="otaPassBtn" class="action-button" type="button">Save OTA password</button></div><p id="otaPassMessage" class="message" role="status"></p>
+      </div>
+    </section>
+
+    <section class="settings-panel" data-panel="otaupdate">
+      <div class="panel-top"><button class="back-button" type="button" data-back aria-label="Back">‹</button><div class="panel-title"><small>MAINTENANCE</small><h1>OTA firmware update</h1></div></div>
+      <div class="panel-card"><h2>Install new firmware</h2><p class="help">Select firmware.bin built for this exact ESP8266 board. Do not upload littlefs.bin in this form.</p>
+        <label class="field">OTA password<input id="otaUploadPassword" type="password" maxlength="64" autocomplete="current-password"></label>
+        <label class="field">Firmware file<input id="firmware" type="file" accept=".bin,application/octet-stream"></label>
+        <div class="settings-button-row"><button id="otaUploadBtn" class="action-button" type="button">Upload firmware</button></div>
+        <progress id="otaProgress" max="100" value="0" hidden></progress><p id="otaStatus" class="message" role="status"></p>
+      </div>
+    </section>
+
+    <section class="settings-panel" data-panel="remote">
+      <div class="panel-top"><button class="back-button" type="button" data-back aria-label="Back">‹</button><div class="panel-title"><small>NETWORK ACCESS</small><h1>Remote access</h1></div></div>
+      <div class="panel-card"><div class="remote-status"><i></i><strong>Remote tunnel not configured</strong></div>
+        <p class="help" style="margin-top:12px">The ESP8266 web server currently provides local-network access. It cannot safely create a public HTTPS tunnel by itself. Do not expose its HTTP port 80 directly to the internet.</p>
+        <h2>Safe remote-access method</h2>
+        <ol class="remote-steps"><li>Use a VPN-capable home router, or a small always-on gateway on the same home network.</li><li>Run a private VPN such as Tailscale on that router or gateway.</li><li>Connect your phone to the same private VPN when away from home.</li><li>Open the ESP8266's home-network IP address in the browser. Local control continues to work when internet is unavailable.</li></ol>
+        <div class="warning-note"><strong>Why this is not enabled automatically:</strong> direct port forwarding would expose an unencrypted local control page and firmware-update endpoint to the public internet. A proper remote gateway needs separate VPN/tunnel credentials and a trusted endpoint.</div>
+        <p class="form-note">The dashboard remains local-only until a separate secure gateway is configured. This menu does not claim that remote control is already active.</p>
+      </div>
+    </section>
+
+    <section class="settings-panel" data-panel="system">
+      <div class="panel-top"><button class="back-button" type="button" data-back aria-label="Back">‹</button><div class="panel-title"><small>DEVICE</small><h1>System and recovery</h1></div></div>
+      <div class="panel-card"><h2>Device status</h2><div class="field-grid"><div><p class="form-note">Firmware</p><strong id="systemVersion">—</strong></div><div><p class="form-note">Local access point</p><strong id="systemApIp">—</strong></div><div><p class="form-note">Home Wi-Fi</p><strong id="systemWifi">—</strong></div><div><p class="form-note">Free memory</p><strong id="systemHeap">—</strong></div></div></div>
+      <div class="panel-card"><h2>Restart controller</h2><p class="help">Restart the ESP8266 without deleting its saved settings.</p><button id="rebootBtn" class="action-button secondary" type="button">Restart device</button><p id="systemMessage" class="message" role="status"></p></div>
+      <div class="panel-card"><h2>Factory reset</h2><p class="help">Clears saved Wi-Fi credentials, relay settings, names, timers, schedules and OTA password.</p><button id="factoryBtn" class="action-button danger" type="button">Factory reset</button></div>
+    </section>
   </main>
-  <script>
-    const $ = (id) => document.getElementById(id);
-    const api = async (url, options = {}) => {
-      const response = await fetch(url, { cache: 'no-store', ...options });
-      let data = {}; try { data = await response.json(); } catch (_) {}
-      if (!response.ok) throw new Error(data.error || `Request failed (${response.status})`);
-      return data;
-    };
-    function message(text, ok = true) { $('settingsMessage').textContent = text; $('settingsMessage').className = `toast ${ok ? 'ok' : 'error'}`; }
-    async function loadSettings() {
-      const data = await api('/api/settings');
-      $('apSsid').value = data.apSsid || ''; $('apChannel').value = String(data.apChannel || 6);
-      $('staSsid').value = data.staSsid || ''; $('deviceName').value = data.deviceName || '';
-      $('otaStatus').textContent = data.otaConfigured ? 'OTA password is configured. Firmware upload is enabled.' : 'OTA is disabled until you create a password above.';
-      $('activeLow').checked = !!data.relayActiveLow;
-      for (let i = 0; i < 4; i += 1) {
-        $(`relayName${i}`).value = data.relayNames?.[i] || `Relay ${i + 1}`;
-        $(`switchPin${i}`).value = String(data.switchPins?.[i] ?? -1);
-        $(`switchLow${i}`).checked = !!data.switchActiveLow?.[i];
-        $(`switchMode${i}`).value = String(data.switchMode?.[i] ?? 0);
-      }
-    }
-    $('settingsForm').addEventListener('submit', async (event) => {
-      event.preventDefault(); const button = $('saveBtn'); button.disabled = true;
-      const relayNames = [0,1,2,3].map(i => $(`relayName${i}`).value.trim());
-      const switchPins = [0,1,2,3].map(i => Number($(`switchPin${i}`).value));
-      const switchActiveLow = [0,1,2,3].map(i => $(`switchLow${i}`).checked);
-      const switchMode = [0,1,2,3].map(i => Number($(`switchMode${i}`).value));
-      if (new Set(switchPins.filter(pin => pin !== -1)).size !== switchPins.filter(pin => pin !== -1).length) { message('A switch GPIO cannot be assigned more than once.', false); button.disabled = false; return; }
-      try {
-        const data = await api('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
-          apSsid: $('apSsid').value.trim(), apPassword: $('apPassword').value, apChannel: Number($('apChannel').value),
-          staSsid: $('staSsid').value.trim(), staPassword: $('staPassword').value, deviceName: $('deviceName').value.trim(),
-          relayActiveLow: $('activeLow').checked, relayNames, switchPins, switchActiveLow, switchMode
-        }) });
-        message(data.message || 'Settings saved. Rebooting…');
-      } catch (error) { message(error.message, false); }
-      finally { button.disabled = false; }
+
+<script>
+'use strict';
+const $ = (id) => document.getElementById(id);
+const api = async (url, options = {}) => {
+  const response = await fetch(url, { cache: 'no-store', ...options });
+  let data = {}; try { data = await response.json(); } catch (_) {}
+  if (!response.ok) throw new Error(data.error || `Request failed (${response.status})`);
+  return data;
+};
+function message(id, text, ok = true) { const node = $(id); node.textContent = text || ''; node.classList.toggle('error', !ok); }
+const postJson = (url, body) => api(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+
+// The settings menu behaves like a compact slide-based app: one category is
+// visible at a time and every category has its own back control.
+function openPanel(name) {
+  $('settingsHome').style.display = 'none';
+  document.querySelectorAll('[data-panel]').forEach((panel) => {
+    panel.classList.remove('visible'); panel.style.display = 'none';
+  });
+  const panel = document.querySelector(`[data-panel="${name}"]`);
+  if (!panel) return;
+  panel.style.display = 'block';
+  requestAnimationFrame(() => panel.classList.add('visible'));
+  if (name === 'automation') refreshAutomation();
+  if (name === 'system') refreshSystem();
+}
+function showMenu() {
+  const current = document.querySelector('[data-panel].visible');
+  if (current) {
+    current.classList.remove('visible');
+    current.style.animation = 'slideOut .18s ease both';
+    window.setTimeout(() => { current.style.display = 'none'; current.style.animation = ''; $('settingsHome').style.display = 'block'; }, 170);
+  } else $('settingsHome').style.display = 'block';
+}
+document.querySelectorAll('[data-open]').forEach((button) => button.addEventListener('click', () => openPanel(button.dataset.open)));
+document.querySelectorAll('[data-back]').forEach((button) => button.addEventListener('click', showMenu));
+
+let loaded = {};
+async function loadSettings() {
+  loaded = await api('/api/settings');
+  $('logoText').value = loaded.logoText || 'Room Automation';
+  $('apSsid').value = loaded.apSsid || '';
+  $('apChannel').value = String(loaded.apChannel || 6);
+  $('staSsid').value = loaded.staSsid || '';
+  $('deviceName').value = loaded.deviceName || 'room-automation';
+  $('otaStatus').textContent = loaded.otaConfigured ? 'OTA password is configured.' : 'OTA is disabled until you create an OTA password.';
+  for (let i = 0; i < 4; i += 1) {
+    $(`relayName${i}`).value = loaded.relayNames?.[i] || `Relay ${i + 1}`;
+    $(`relayPolarity${i}`).value = String(loaded.relayActiveLow?.[i] ?? true);
+    $(`switchPin${i}`).value = String(loaded.switchPins?.[i] ?? -1);
+    $(`switchLow${i}`).checked = !!loaded.switchActiveLow?.[i];
+    $(`switchMode${i}`).value = String(loaded.switchMode?.[i] ?? 0);
+  }
+}
+function settingsPayload() {
+  const relayNames = [0,1,2,3].map(i => $(`relayName${i}`).value.trim());
+  const relayActiveLow = [0,1,2,3].map(i => $(`relayPolarity${i}`).value === 'true');
+  const switchPins = [0,1,2,3].map(i => Number($(`switchPin${i}`).value));
+  const switchActiveLow = [0,1,2,3].map(i => $(`switchLow${i}`).checked);
+  const switchMode = [0,1,2,3].map(i => Number($(`switchMode${i}`).value));
+  if (relayNames.some((name) => !name || name.length > 23)) throw new Error('Each relay name must be 1 to 23 characters.');
+  if (new Set(switchPins.filter(pin => pin !== -1)).size !== switchPins.filter(pin => pin !== -1).length) throw new Error('A switch GPIO cannot be assigned more than once.');
+  return {
+    logoText: $('logoText').value.trim() || 'Room Automation',
+    apSsid: $('apSsid').value.trim(), apPassword: $('apPassword').value,
+    apChannel: Number($('apChannel').value), staSsid: $('staSsid').value.trim(),
+    staPassword: $('staPassword').value, deviceName: $('deviceName').value.trim(),
+    relayNames, relayActiveLow, switchPins, switchActiveLow, switchMode
+  };
+}
+async function saveAllSettings(targetMessage) {
+  const data = await postJson('/api/settings', settingsPayload());
+  message(targetMessage, data.message || 'Saved. Restarting device…');
+}
+$('saveLogo').addEventListener('click', async () => {
+  try { await saveAllSettings('logoMessage'); }
+  catch (error) { message('logoMessage', error.message, false); }
+});
+$('relayForm').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  try { await saveAllSettings('relayMessage'); }
+  catch (error) { message('relayMessage', error.message, false); }
+});
+$('wifiForm').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  try { await saveAllSettings('wifiMessage'); }
+  catch (error) { message('wifiMessage', error.message, false); }
+});
+
+$('scanBtn').addEventListener('click', async () => {
+  const button = $('scanBtn'), box = $('scanList'); button.disabled = true; box.textContent = 'Scanning nearby 2.4 GHz networks…';
+  try {
+    const networks = await api('/api/wifi/scan'); box.replaceChildren();
+    if (!networks.length) { box.textContent = 'No networks found.'; return; }
+    networks.forEach((network) => {
+      const item = document.createElement('button'); item.type = 'button'; item.className = 'scan-item';
+      const name = document.createElement('strong'); name.textContent = network.ssid || 'Hidden network';
+      const info = document.createElement('small'); info.textContent = `${network.rssi} dBm · Ch ${network.channel}${network.secure ? ' · secured' : ' · open'}`;
+      item.append(name, info); item.addEventListener('click', () => { $('staSsid').value = network.ssid || ''; $('staPassword').focus(); }); box.appendChild(item);
     });
-    $('scanBtn').addEventListener('click', async () => {
-      const button = $('scanBtn'), box = $('scanList'); button.disabled = true; box.textContent = 'Scanning 2.4 GHz networks…';
-      try {
-        const networks = await api('/api/wifi/scan'); box.replaceChildren();
-        if (!networks.length) { box.textContent = 'No networks found.'; return; }
-        networks.forEach((network) => {
-          const item = document.createElement('button'); item.type = 'button'; item.className = 'scan-item';
-          const name = document.createElement('strong'); name.textContent = network.ssid || 'Hidden network';
-          const info = document.createElement('small'); info.textContent = `${network.rssi} dBm · Ch ${network.channel}${network.secure ? ' · secured' : ' · open'}`;
-          item.append(name, info); item.addEventListener('click', () => { if (network.ssid) { $('staSsid').value = network.ssid; $('staPassword').focus(); } else { $('staSsid').focus(); } }); box.appendChild(item);
-        });
-      } catch (error) { box.textContent = error.message; }
-      finally { button.disabled = false; }
+  } catch (error) { box.textContent = error.message; }
+  finally { button.disabled = false; }
+});
+
+$('otaPassBtn').addEventListener('click', async () => {
+  try {
+    const data = await postJson('/api/ota/password', { oldPassword: $('oldOta').value, newPassword: $('newOta').value, confirmPassword: $('confirmOta').value });
+    message('otaPassMessage', data.message || 'OTA password saved.');
+    $('oldOta').value = ''; $('newOta').value = ''; $('confirmOta').value = '';
+  } catch (error) { message('otaPassMessage', error.message, false); }
+});
+$('otaUploadBtn').addEventListener('click', () => {
+  const file = $('firmware').files[0], password = $('otaUploadPassword').value;
+  if (!file || !password) { message('otaStatus', 'Select firmware.bin and enter the OTA password.', false); return; }
+  const progress = $('otaProgress'); progress.hidden = false; progress.value = 0; message('otaStatus', 'Uploading firmware…');
+  const request = new XMLHttpRequest();
+  request.open('POST', `/api/ota/upload?password=${encodeURIComponent(password)}`);
+  request.upload.onprogress = (event) => { if (event.lengthComputable) progress.value = event.loaded / event.total * 100; };
+  request.onload = () => {
+    let data = {}; try { data = JSON.parse(request.responseText); } catch (_) {}
+    if (request.status >= 200 && request.status < 300) { progress.value = 100; message('otaStatus', data.message || 'Firmware accepted. Device is rebooting…'); }
+    else message('otaStatus', data.error || 'OTA update rejected.', false);
+  };
+  request.onerror = () => message('otaStatus', 'Network error during OTA upload.', false);
+  const payload = new FormData(); payload.append('firmware', file, file.name); request.send(payload);
+});
+
+function duration(seconds) {
+  const s = Math.max(0, Number(seconds) || 0), d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60), sec = s % 60;
+  return d ? `${d}d ${h}h ${m}m` : `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+}
+let currentRelayNames = ['Relay 1','Relay 2','Relay 3','Relay 4'];
+async function refreshAutomation() {
+  try {
+    const data = await api('/api/automation');
+    $('clockStatus').textContent = data.timeSynced ? `Clock synchronized · ${data.localTime || 'IST'}` : 'Clock not synchronized · weekly schedules paused';
+    const names = currentRelayNames;
+    const settings = await api('/api/state');
+    if (Array.isArray(settings.relayNames)) currentRelayNames = settings.relayNames;
+    for (let i = 0; i < 4; i += 1) $(`timerName${i}`).textContent = currentRelayNames[i] || names[i];
+    [...$('scheduleRelay').options].forEach(option => { option.textContent = currentRelayNames[Number(option.value)] || `Relay ${Number(option.value)+1}`; });
+    (data.timers || []).forEach((timer) => {
+      const box = document.querySelector(`[data-timer="${timer.relay}"]`);
+      const status = $('.timer-status', box);
+      status.textContent = timer.enabled ? `${duration(timer.remainingSec)} · then ${timer.action ? 'ON' : 'OFF'}` : 'No timer';
+      status.classList.toggle('running', !!timer.enabled);
     });
-    $('otaPassBtn').addEventListener('click', async () => {
-      try { const data = await api('/api/ota/password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ oldPassword: $('oldOta').value, newPassword: $('newOta').value, confirmPassword: $('confirmOta').value }) }); message(data.message || 'OTA password updated.'); }
-      catch (error) { message(error.message, false); }
-    });
-    $('otaUploadBtn').addEventListener('click', () => {
-      const file = $('firmware').files[0];
-      const password = $('otaUploadPassword').value;
-      if (!file || !password) { $('otaStatus').textContent = 'Select a firmware file and enter the OTA password.'; return; }
-      const progress = $('otaProgress'); progress.hidden = false; progress.value = 0; $('otaStatus').textContent = 'Uploading…';
-      const request = new XMLHttpRequest();
-      request.open('POST', `/api/ota/upload?password=${encodeURIComponent(password)}`);
-      request.upload.onprogress = (e) => { if (e.lengthComputable) progress.value = (e.loaded / e.total) * 100; };
-      request.onload = () => { let data = {}; try { data = JSON.parse(request.responseText); } catch (_) {} if (request.status >= 200 && request.status < 300) { progress.value = 100; $('otaStatus').textContent = data.message || 'Update accepted. Rebooting…'; } else $('otaStatus').textContent = data.error || 'OTA update rejected.'; };
-      request.onerror = () => { $('otaStatus').textContent = 'Network error during OTA upload.'; };
-      const payload = new FormData();
-      payload.append('firmware', file, file.name);
-      request.send(payload);
-    });
-    $('factoryBtn').addEventListener('click', async () => {
-      if (window.prompt('Type RESET to confirm factory reset') !== 'RESET') return;
-      try { const data = await api('/api/factory-reset', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'confirm=RESET' }); message(data.message || 'Factory reset complete.'); }
-      catch (error) { message(error.message, false); }
-    });
-    loadSettings().catch(error => message(`Could not load settings: ${error.message}`, false));
-  </script>
+    renderSchedules(data.schedules || []);
+  } catch (error) { message('automationMessage', error.message, false); }
+}
+function renderSchedules(items) {
+  const box = $('scheduleItems'); box.replaceChildren();
+  if (!items.length) { const p = document.createElement('p'); p.className='form-note'; p.textContent='No schedules set.'; box.appendChild(p); return; }
+  const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  items.forEach((item) => {
+    const row = document.createElement('div'); row.className='schedule-item';
+    const info = document.createElement('div'), title=document.createElement('strong'), meta=document.createElement('small');
+    title.textContent = `${currentRelayNames[item.relay] || `Relay ${item.relay+1}`} · ${item.action ? 'ON' : 'OFF'}`;
+    meta.textContent = `${String(Math.floor(item.minuteOfDay/60)).padStart(2,'0')}:${String(item.minuteOfDay%60).padStart(2,'0')} · ${days.filter((_,i)=>item.daysMask & (1<<i)).join(' ')}`;
+    info.append(title,meta);
+    const remove=document.createElement('button'); remove.type='button'; remove.className='remove-rule'; remove.textContent='Remove';
+    remove.addEventListener('click', async () => { try { await api('/api/schedule',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({slot:item.slot})}); await refreshAutomation(); message('automationMessage','Schedule removed.'); } catch(error) { message('automationMessage',error.message,false); } });
+    row.append(info,remove); box.appendChild(row);
+  });
+}
+document.querySelectorAll('[data-timer]').forEach((box) => {
+  const relay = Number(box.dataset.timer);
+  $('.timer-start', box).addEventListener('click', async () => {
+    const hours = Number($('.timer-hours',box).value), minutes = Number($('.timer-minutes',box).value), seconds = hours*3600 + minutes*60;
+    const action = $('.timer-action',box).value === 'true';
+    if (!Number.isInteger(hours)||hours<0||hours>720||!Number.isInteger(minutes)||minutes<0||minutes>59||seconds<1||seconds>2592000) { message('automationMessage','Enter a timer from 1 minute to 30 days.',false); return; }
+    try { await postJson('/api/timer',{relay,seconds,action}); await refreshAutomation(); message('automationMessage',`Timer saved for ${currentRelayNames[relay]}.`); }
+    catch(error) { message('automationMessage',error.message,false); }
+  });
+  $('.timer-cancel', box).addEventListener('click', async () => { try { await postJson('/api/timer',{relay,seconds:0,action:false}); await refreshAutomation(); message('automationMessage','Timer cancelled.'); } catch(error) { message('automationMessage',error.message,false); } });
+});
+$('scheduleForm').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const [hour,minute] = $('scheduleTime').value.split(':').map(Number);
+  const daysMask = [...document.querySelectorAll('.schedule-days input:checked')].reduce((mask,input)=>mask | (1<<Number(input.value)),0);
+  if (!Number.isInteger(hour)||!Number.isInteger(minute)||daysMask===0) { message('automationMessage','Choose a valid time and at least one day.',false); return; }
+  try {
+    const existing = await api('/api/automation'), used = new Set((existing.schedules||[]).map(rule=>rule.slot));
+    let slot=-1; for(let i=0;i<8;i+=1) if(!used.has(i)){slot=i;break;}
+    if(slot<0) throw new Error('All 8 schedule places are in use. Remove one first.');
+    await postJson('/api/schedule',{slot,relay:Number($('scheduleRelay').value),action:$('scheduleAction').value==='true',daysMask,minuteOfDay:hour*60+minute,enabled:true});
+    await refreshAutomation(); message('automationMessage','Weekly schedule saved.');
+  } catch(error) { message('automationMessage',error.message,false); }
+});
+
+async function refreshSystem() {
+  try {
+    const data = await api('/api/state');
+    $('systemVersion').textContent = data.version || '—'; $('systemApIp').textContent = data.apIp || '—';
+    $('systemWifi').textContent = data.wifiConnected ? `Online · ${data.ip}` : 'Offline';
+    $('systemHeap').textContent = Number(data.heap) ? `${Number(data.heap).toLocaleString()} bytes` : '—';
+  } catch (_) { $('systemWifi').textContent = 'Status unavailable'; }
+}
+$('rebootBtn').addEventListener('click', async () => {
+  if (!window.confirm('Restart the ESP8266 now?')) return;
+  try { await api('/api/reboot',{method:'POST'}); message('systemMessage','Restarting…'); } catch(error) { message('systemMessage',error.message,false); }
+});
+$('factoryBtn').addEventListener('click', async () => {
+  if (window.prompt('Type RESET to confirm factory reset') !== 'RESET') return;
+  try { const data = await api('/api/factory-reset',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'confirm=RESET'}); message('systemMessage',data.message||'Factory reset started.'); }
+  catch(error) { message('systemMessage',error.message,false); }
+});
+
+// Only inputs, textareas and selects can be selected/copied. All explanatory
+// text and labels remain non-selectable, including Android long-press.
+const editable = (target) => !!target.closest('input,textarea,select,[contenteditable="true"]');
+document.addEventListener('contextmenu',(event)=>{if(!editable(event.target))event.preventDefault();});
+document.addEventListener('selectstart',(event)=>{if(!editable(event.target))event.preventDefault();});
+document.addEventListener('copy',(event)=>{if(!editable(event.target))event.preventDefault();});
+
+loadSettings().catch(error => message('logoMessage',`Could not load settings: ${error.message}`,false));
+window.setInterval(() => { if (document.querySelector('[data-panel="automation"].visible')) refreshAutomation(); }, 5000);
+</script>
 </body>
 </html>

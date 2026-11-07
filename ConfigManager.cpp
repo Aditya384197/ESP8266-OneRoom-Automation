@@ -5,7 +5,7 @@ static constexpr uint32_t CONFIG_MAGIC = 0x4F524143UL; // ORAC
 static constexpr uint32_t STATE_MAGIC  = 0x4F524153UL; // ORAS
 static constexpr uint32_t AUTOMATION_MAGIC = 0x4F524141UL; // ORAA
 static constexpr uint16_t FORMAT_VERSION = 1;
-static constexpr uint16_t AUTOMATION_VERSION = 1;
+static constexpr uint16_t AUTOMATION_VERSION = 2;
 
 static const char* DEFAULT_AP_SSID = "RoomAutomation-ESP";
 static const char* DEFAULT_AP_PASS = "RA8266@Setup2026";
@@ -52,10 +52,12 @@ void ConfigManager::defaultAutomation() {
   const uint8_t pins[4] = {255, 255, 255, 255};
   const uint8_t activeLow[4] = {1, 1, 1, 1};
   const char* names[4] = {"Ceiling Fan", "Charging Socket", "LED 1", "LED 2"};
+  strlcpy(_automation.logoText, "Room Automation", sizeof(_automation.logoText));
   for (uint8_t i = 0; i < 4; ++i) {
     _automation.switchPin[i] = pins[i];
     _automation.switchActiveLow[i] = activeLow[i];
     _automation.switchMode[i] = 0;
+    _automation.relayActiveLow[i] = 1; // Safe default for common low-trigger relay boards.
     strlcpy(_automation.relayName[i], names[i], sizeof(_automation.relayName[i]));
   }
   for (uint8_t i = 0; i < 8; ++i) {
@@ -86,7 +88,51 @@ bool ConfigManager::loadState() {
 }
 
 bool ConfigManager::loadAutomation() {
+  // Version-1 automation records are migrated in-place. Existing relay names,
+  // switch mappings, timers and schedules are preserved; new polarity values
+  // default to Active-Low and the new logo gets a safe default.
+  struct LegacyAutomationConfigV1 {
+    uint32_t magic;
+    uint16_t version;
+    uint16_t reserved;
+    uint8_t switchPin[4];
+    uint8_t switchActiveLow[4];
+    uint8_t switchMode[4];
+    char relayName[4][24];
+    RelayTimerConfig timers[4];
+    ScheduleRule schedules[8];
+    uint32_t crc32;
+  };
+
+  auto migrateLegacy = [&](const char* path) -> bool {
+    File f = LittleFS.open(path, "r");
+    if (!f || (size_t)f.size() != sizeof(LegacyAutomationConfigV1)) {
+      if (f) f.close();
+      return false;
+    }
+    LegacyAutomationConfigV1 old{};
+    const size_t n = f.read((uint8_t*)&old, sizeof(old));
+    f.close();
+    if (n != sizeof(old) || old.magic != AUTOMATION_MAGIC || old.version != 1) return false;
+    const uint32_t stored = old.crc32;
+    old.crc32 = 0;
+    if (stored != crc32((const uint8_t*)&old, sizeof(old))) return false;
+
+    defaultAutomation();
+    memcpy(_automation.switchPin, old.switchPin, sizeof(old.switchPin));
+    memcpy(_automation.switchActiveLow, old.switchActiveLow, sizeof(old.switchActiveLow));
+    memcpy(_automation.switchMode, old.switchMode, sizeof(old.switchMode));
+    memcpy(_automation.relayName, old.relayName, sizeof(old.relayName));
+    memcpy(_automation.timers, old.timers, sizeof(old.timers));
+    memcpy(_automation.schedules, old.schedules, sizeof(old.schedules));
+    for (uint8_t i = 0; i < 4; ++i) _automation.relayActiveLow[i] = 1;
+    updateAutomationCrc();
+    return saveAutomation();
+  };
+
   if (loadBinary("/automation.bin", "/automation.bak", &_automation, sizeof(_automation))) return true;
+  if (migrateLegacy("/automation.bin")) return true;
+  if (migrateLegacy("/automation.bak")) return true;
   defaultAutomation();
   return saveAutomation();
 }
@@ -195,10 +241,12 @@ bool ConfigManager::validateState(const RelayState& s) const {
 
 bool ConfigManager::validateAutomation(const AutomationConfig& a) const {
   if (a.magic != AUTOMATION_MAGIC || a.version != AUTOMATION_VERSION) return false;
+  const size_t logoLen = strnlen(a.logoText, sizeof(a.logoText));
+  if (logoLen == 0 || logoLen >= sizeof(a.logoText)) return false;
   for (uint8_t i = 0; i < 4; ++i) {
     const uint8_t pin = a.switchPin[i];
     if (pin != 255 && pin != 16 && pin != 0 && pin != 2 && pin != 15) return false;
-    if (a.switchActiveLow[i] > 1 || a.switchMode[i] > 1) return false;
+    if (a.switchActiveLow[i] > 1 || a.switchMode[i] > 1 || a.relayActiveLow[i] > 1) return false;
     const size_t nameLen = strnlen(a.relayName[i], sizeof(a.relayName[i]));
     if (nameLen == 0 || nameLen >= sizeof(a.relayName[i])) return false;
     for (uint8_t j = i + 1; j < 4; ++j) {

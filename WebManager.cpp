@@ -223,6 +223,7 @@ void WebManager::handleState() {
   doc["heap"] = ESP.getFreeHeap();
   doc["uptimeSec"] = millis() / 1000UL;
   doc["apClients"] = WiFi.softAPgetStationNum();
+  doc["logoText"] = _cfg->automation().logoText;
 
   JsonArray relays = doc["relays"].to<JsonArray>();
   JsonArray names = doc["relayNames"].to<JsonArray>();
@@ -250,7 +251,7 @@ void WebManager::handleSettingsGet() {
   doc["apChannel"] = c.apChannel;
   doc["staSsid"] = c.staSsid;
   doc["deviceName"] = c.deviceName;
-  doc["relayActiveLow"] = c.relayActiveLow != 0;
+  doc["logoText"] = a.logoText;
   doc["apPasswordSet"] = c.apPassword[0] != '\0';
   doc["staPasswordSet"] = c.staPassword[0] != '\0';
   doc["otaConfigured"] = strlen(c.otaMd5) == 32;
@@ -259,11 +260,13 @@ void WebManager::handleSettingsGet() {
   JsonArray switchPins = doc["switchPins"].to<JsonArray>();
   JsonArray switchActiveLow = doc["switchActiveLow"].to<JsonArray>();
   JsonArray switchMode = doc["switchMode"].to<JsonArray>();
+  JsonArray relayActiveLow = doc["relayActiveLow"].to<JsonArray>();
   for (uint8_t i = 0; i < 4; ++i) {
     names.add(a.relayName[i]);
     switchPins.add(a.switchPin[i] == 255 ? -1 : a.switchPin[i]);
     switchActiveLow.add(a.switchActiveLow[i] != 0);
     switchMode.add(a.switchMode[i]);
+    relayActiveLow.add(a.relayActiveLow[i] != 0);
   }
 
   // Passwords are NEVER returned to the browser.
@@ -284,14 +287,17 @@ void WebManager::handleSettingsSave() {
   const String staSsid = doc["staSsid"] | "";
   const String staPassword = doc["staPassword"] | "";
   const String deviceName = doc["deviceName"] | "";
+  const String logoText = doc["logoText"] | _cfg->automation().logoText;
   const int apChannelValue = doc["apChannel"] | 6;
-  const bool relayActiveLow = doc["relayActiveLow"] | true;
 
   if (!validText(apSsid, 32, false) || apSsid.length() < 1) {
     jsonError(400, "Invalid AP SSID"); return;
   }
   if (apChannelValue < 1 || apChannelValue > 13) {
     jsonError(400, "Invalid AP channel"); return;
+  }
+  if (!validText(logoText, 255, false) || logoText.length() < 1) {
+    jsonError(400, "Logo text must be 1 to 255 characters"); return;
   }
   if (!validText(deviceName, 32, false) || deviceName.length() < 1 ||
       deviceName[0] == '-' || deviceName[deviceName.length() - 1] == '-') {
@@ -329,7 +335,13 @@ void WebManager::handleSettingsSave() {
     strlcpy(nextConfig.staPassword, staPassword.c_str(), sizeof(nextConfig.staPassword));
   }
   strlcpy(nextConfig.deviceName, deviceName.c_str(), sizeof(nextConfig.deviceName));
-  nextConfig.relayActiveLow = relayActiveLow ? 1 : 0;
+  strlcpy(nextAutomation.logoText, logoText.c_str(), sizeof(nextAutomation.logoText));
+
+  if (doc["relayActiveLow"].is<JsonArray>()) {
+    JsonArrayConst polarity = doc["relayActiveLow"].as<JsonArrayConst>();
+    if (polarity.size() != 4) { jsonError(400, "Exactly four relay polarity values are required"); return; }
+    for (uint8_t i = 0; i < 4; ++i) nextAutomation.relayActiveLow[i] = (polarity[i] | true) ? 1 : 0;
+  }
 
   // Relay GPIOs are fixed by the user's hardware definition. Switch inputs
   // can be disabled (-1) or mapped only to the four documented spare pins.
