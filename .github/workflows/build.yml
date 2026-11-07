@@ -1,202 +1,107 @@
-name: Build ESP8266 Firmware
+name: ESP8266 Firmware and LittleFS
 
 on:
   push:
-    branches:
-      - main
-      - master
-
+    branches: [main, master]
+  pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
 
 jobs:
-
   build:
-
     runs-on: ubuntu-latest
-
+    timeout-minutes: 30
     steps:
-
-      # ===================================================
-      # Checkout
-      # ===================================================
-
-      - name: Checkout repository
+      - name: Checkout source
         uses: actions/checkout@v4
 
-
-      # ===================================================
-      # Python
-      # ===================================================
-
-      - name: Setup Python
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.x"
 
-
-      # ===================================================
-      # Install PlatformIO
-      # ===================================================
-
       - name: Install PlatformIO
         run: |
           python -m pip install --upgrade pip
-          pip install platformio
+          python -m pip install platformio
 
-
-      # ===================================================
-      # Show repository structure
-      # ===================================================
-
-      - name: Inspect repository
+      - name: Show build configuration
         run: |
-          echo "===== Repository root ====="
-          find . -maxdepth 2 -type f \
-            ! -path "./.git/*" \
-            ! -path "./.pio/*" \
-            | sort
+          pio --version
+          echo "===== PlatformIO configuration ====="
+          cat platformio.ini
+          echo "===== Source files ====="
+          find . -maxdepth 3 -type f \
+            ! -path './.git/*' ! -path './.pio/*' | sort
 
-
-      # ===================================================
-      # Clean previous build
-      # ===================================================
-
-      - name: Clean build
+      - name: Build ESP8266 firmware
         run: |
-          set -e
-          pio run -e nodemcuv2 -t clean
-
-
-      # ===================================================
-      # Build firmware
-      # ===================================================
-
-      - name: Build firmware
-        run: |
-          set -e
-
-          echo "===== Building firmware ====="
-
+          set -euo pipefail
           pio run -e nodemcuv2
-
-
-      # ===================================================
-      # Build LittleFS
-      # ===================================================
-
-      - name: Build LittleFS
-        run: |
-          set -e
-
-          echo "===== Building LittleFS ====="
-
-          pio run -e nodemcuv2 -t buildfs
-
-
-      # ===================================================
-      # Verify output
-      # ===================================================
-
-      - name: Verify firmware and LittleFS
-        run: |
-          set -e
-
-          echo ""
-          echo "=================================================="
-          echo " BUILD OUTPUT"
-          echo "=================================================="
-
-          ls -lah .pio/build/nodemcuv2/
-
-          echo ""
-          echo "Checking firmware.bin..."
-
           test -s .pio/build/nodemcuv2/firmware.bin
+          echo "Firmware image verified."
 
-          echo "firmware.bin: OK"
-
-          echo ""
-          echo "Checking littlefs.bin..."
-
-          test -s .pio/build/nodemcuv2/littlefs.bin
-
-          echo "littlefs.bin: OK"
-
-
-      # ===================================================
-      # Verify LittleFS source
-      # ===================================================
-
-      - name: Verify filesystem source
+      - name: Verify prepared LittleFS source
         run: |
-          set -e
-
-          echo ""
-          echo "=================================================="
-          echo " ROOT WEB FILES"
-          echo "=================================================="
-
-          for file in \
-            index.html \
-            settings.html \
-            app.js \
-            style.css
-          do
-            if [ ! -f "$file" ]; then
-              echo "ERROR: Missing $file"
-              exit 1
-            fi
-
-            echo "OK: $file"
+          set -euo pipefail
+          for file in index.html settings.html app.js style.css; do
+            test -s ".piofs/$file"
           done
+          echo "===== LittleFS source files ====="
+          find .piofs -maxdepth 1 -type f -printf '%f %s bytes\n' | sort
 
-          echo ""
-          echo "=================================================="
-          echo " LITTLEFS TEMPORARY DIRECTORY"
-          echo "=================================================="
-
-          if [ -d ".piofs" ]; then
-            find .piofs -type f -printf "%p\n" | sort
-          else
-            echo "ERROR: .piofs directory does not exist"
-            exit 1
-          fi
-
-
-      # ===================================================
-      # Prepare artifacts
-      # ===================================================
-
-      - name: Prepare artifacts
+      - name: Build LittleFS image
         run: |
-          set -e
+          set -euo pipefail
+          pio run -e nodemcuv2 -t buildfs
+          test -s .pio/build/nodemcuv2/littlefs.bin
+          echo "LittleFS image verified."
 
+      - name: Prepare and checksum artifacts
+        run: |
+          set -euo pipefail
           rm -rf artifacts
           mkdir -p artifacts
-
-          cp .pio/build/nodemcuv2/firmware.bin \
-             artifacts/firmware.bin
-
-          cp .pio/build/nodemcuv2/littlefs.bin \
-             artifacts/littlefs.bin
-
-          echo ""
-          echo "=================================================="
-          echo " FINAL ARTIFACTS"
-          echo "=================================================="
-
+          cp .pio/build/nodemcuv2/firmware.bin artifacts/firmware.bin
+          cp .pio/build/nodemcuv2/littlefs.bin artifacts/littlefs.bin
+          {
+            echo "Board: NodeMCU v2 (ESP8266)"
+            echo "PlatformIO environment: nodemcuv2"
+            echo "Firmware: firmware.bin"
+            echo "Filesystem: littlefs.bin"
+            echo "Flash layout: 4 MB flash / 1 MB LittleFS"
+          } > artifacts/BUILD-INFO.txt
+          (cd artifacts && sha256sum firmware.bin littlefs.bin > SHA256SUMS)
+          zip -j artifacts/ESP8266-OneRoom-Automation-1.4.0.zip \
+            artifacts/firmware.bin artifacts/littlefs.bin \
+            artifacts/BUILD-INFO.txt artifacts/SHA256SUMS
           ls -lh artifacts/
 
-
-      # ===================================================
-      # Upload artifacts
-      # ===================================================
-
-      - name: Upload firmware artifacts
+      - name: Upload firmware image
         uses: actions/upload-artifact@v4
         with:
-          name: ESP8266-OneRoom-Automation
-          path: artifacts/
+          name: ESP8266-firmware
+          path: artifacts/firmware.bin
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload LittleFS image
+        uses: actions/upload-artifact@v4
+        with:
+          name: ESP8266-littlefs
+          path: artifacts/littlefs.bin
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload complete release bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: ESP8266-OneRoom-Automation-1.4.0
+          path: |
+            artifacts/ESP8266-OneRoom-Automation-1.4.0.zip
+            artifacts/BUILD-INFO.txt
+            artifacts/SHA256SUMS
           if-no-files-found: error
           retention-days: 30
