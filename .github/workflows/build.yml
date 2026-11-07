@@ -20,7 +20,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.x"
+          python-version: "3.12"
 
       - name: Install PlatformIO
         run: |
@@ -29,43 +29,72 @@ jobs:
 
       - name: Show build configuration
         run: |
+          set -euo pipefail
           pio --version
           echo "===== PlatformIO configuration ====="
           cat platformio.ini
-          echo "===== Source files ====="
+          echo "===== Repository source files ====="
           find . -maxdepth 3 -type f \
             ! -path './.git/*' ! -path './.pio/*' | sort
 
-      - name: Build ESP8266 firmware
+      # Build and copy the firmware immediately. The later buildfs target can
+      # regenerate PlatformIO's build directory, so do not depend on the
+      # firmware.bin still being present after buildfs has run.
+      - name: Build and stage ESP8266 firmware
         run: |
           set -euo pipefail
           pio run -e nodemcuv2
-          test -s .pio/build/nodemcuv2/firmware.bin
-          echo "Firmware image verified."
+
+          FIRMWARE_PATH=".pio/build/nodemcuv2/firmware.bin"
+          if [ ! -s "$FIRMWARE_PATH" ]; then
+            echo "ERROR: Firmware output was not generated: $FIRMWARE_PATH"
+            echo "===== PlatformIO build directory ====="
+            find .pio/build -maxdepth 3 -type f -printf '%p %s bytes\n' 2>/dev/null | sort || true
+            exit 1
+          fi
+
+          mkdir -p artifacts
+          cp "$FIRMWARE_PATH" artifacts/firmware.bin
+          test -s artifacts/firmware.bin
+          echo "Firmware staged before LittleFS build:"
+          ls -lh artifacts/firmware.bin
 
       - name: Verify prepared LittleFS source
         run: |
           set -euo pipefail
           for file in index.html settings.html app.js style.css; do
-            test -s ".piofs/$file"
+            if [ ! -s ".piofs/$file" ]; then
+              echo "ERROR: Missing or empty LittleFS source: .piofs/$file"
+              exit 1
+            fi
           done
           echo "===== LittleFS source files ====="
           find .piofs -maxdepth 1 -type f -printf '%f %s bytes\n' | sort
 
-      - name: Build LittleFS image
+      - name: Build and stage LittleFS image
         run: |
           set -euo pipefail
           pio run -e nodemcuv2 -t buildfs
-          test -s .pio/build/nodemcuv2/littlefs.bin
-          echo "LittleFS image verified."
 
-      - name: Prepare and checksum artifacts
+          LITTLEFS_PATH=".pio/build/nodemcuv2/littlefs.bin"
+          if [ ! -s "$LITTLEFS_PATH" ]; then
+            echo "ERROR: LittleFS output was not generated: $LITTLEFS_PATH"
+            echo "===== PlatformIO build directory ====="
+            find .pio/build -maxdepth 3 -type f -printf '%p %s bytes\n' 2>/dev/null | sort || true
+            exit 1
+          fi
+
+          cp "$LITTLEFS_PATH" artifacts/littlefs.bin
+          test -s artifacts/littlefs.bin
+          echo "LittleFS image staged:"
+          ls -lh artifacts/littlefs.bin
+
+      - name: Prepare and checksum release artifacts
         run: |
           set -euo pipefail
-          rm -rf artifacts
-          mkdir -p artifacts
-          cp .pio/build/nodemcuv2/firmware.bin artifacts/firmware.bin
-          cp .pio/build/nodemcuv2/littlefs.bin artifacts/littlefs.bin
+          test -s artifacts/firmware.bin
+          test -s artifacts/littlefs.bin
+
           {
             echo "Board: NodeMCU v2 (ESP8266)"
             echo "PlatformIO environment: nodemcuv2"
@@ -73,11 +102,18 @@ jobs:
             echo "Filesystem: littlefs.bin"
             echo "Flash layout: 4 MB flash / 1 MB LittleFS"
           } > artifacts/BUILD-INFO.txt
+
           (cd artifacts && sha256sum firmware.bin littlefs.bin > SHA256SUMS)
+
           zip -j artifacts/ESP8266-OneRoom-Automation-1.4.0.zip \
-            artifacts/firmware.bin artifacts/littlefs.bin \
-            artifacts/BUILD-INFO.txt artifacts/SHA256SUMS
+            artifacts/firmware.bin \
+            artifacts/littlefs.bin \
+            artifacts/BUILD-INFO.txt \
+            artifacts/SHA256SUMS
+
+          echo "===== Final artifacts ====="
           ls -lh artifacts/
+          unzip -l artifacts/ESP8266-OneRoom-Automation-1.4.0.zip
 
       - name: Upload firmware image
         uses: actions/upload-artifact@v4
