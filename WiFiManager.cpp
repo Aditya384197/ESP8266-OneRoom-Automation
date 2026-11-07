@@ -1,4 +1,5 @@
 #include "WiFiManager.h"
+#include <time.h>
 
 void WiFiController::begin(ConfigManager& cfg) {
   _cfg = &cfg;
@@ -40,6 +41,7 @@ void WiFiController::connectSTA() {
 
   if (config.staSsid[0] == '\0') {
     _lastAttempt = millis();
+    _connectPending = false;
     return;
   }
 
@@ -59,6 +61,7 @@ void WiFiController::connectSTA() {
   );
 
   _lastAttempt = millis();
+  _connectPending = true;
 }
 
 void WiFiController::stopMDNS() {
@@ -73,6 +76,14 @@ void WiFiController::loop() {
 
   if (WiFi.status() == WL_CONNECTED) {
     _backoff = 1000;
+    _connectPending = false;
+
+    if (!_ntpStarted) {
+      // India Standard Time (UTC+05:30). Time-based schedules are paused
+      // until a valid NTP clock has been acquired.
+      configTime(19800, 0, "pool.ntp.org", "time.google.com");
+      _ntpStarted = true;
+    }
 
     if (!_mdnsStarted) {
       if (MDNS.begin(_cfg->config().deviceName)) {
@@ -96,18 +107,23 @@ void WiFiController::loop() {
 
   const unsigned long now = millis();
 
+  // Do not repeatedly call WiFi.begin() while the previous association is
+  // still in progress; the ESP8266 can otherwise restart its scan loop.
+  if (_connectPending) {
+    if ((unsigned long)(now - _lastAttempt) < 15000UL) {
+      yield();
+      return;
+    }
+    // A connection attempt timed out. Increase the delay before the next
+    // attempt instead of continuously restarting the ESP8266 association.
+    _connectPending = false;
+    _lastAttempt = now;
+    const unsigned long next = _backoff >= 30000UL ? 60000UL : _backoff * 2UL;
+    _backoff = next > 60000UL ? 60000UL : next;
+  }
+
   if ((unsigned long)(now - _lastAttempt) >= _backoff) {
     connectSTA();
-
-    const unsigned long next =
-      (_backoff < 60000UL)
-        ? (_backoff * 2UL)
-        : 60000UL;
-
-    _backoff =
-      (next > 60000UL)
-        ? 60000UL
-        : next;
   }
 
   yield();
@@ -125,11 +141,16 @@ void WiFiController::applySettings() {
   startAP();
 
   _backoff = 1000;
+  _connectPending = false;
   connectSTA();
 }
 
 bool WiFiController::staConnected() const {
   return WiFi.status() == WL_CONNECTED;
+}
+
+bool WiFiController::timeSynced() const {
+  return time(nullptr) > 1700000000;
 }
 
 String WiFiController::ipString() const {

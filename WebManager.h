@@ -6,10 +6,12 @@
 #include "ConfigManager.h"
 #include "RelayManager.h"
 #include "WiFiManager.h"
+#include "AutomationManager.h"
 
 class WebManager {
 public:
-  void begin(ConfigManager& cfg, RelayManager& relays, WiFiController& wifi);
+  void begin(ConfigManager& cfg, RelayManager& relays,
+             WiFiController& wifi, AutomationManager& automation);
   void loop();
   bool otaInProgress() const { return _otaInProgress; }
 
@@ -19,6 +21,7 @@ private:
   ConfigManager* _cfg = nullptr;
   RelayManager* _relays = nullptr;
   WiFiController* _wifi = nullptr;
+  AutomationManager* _automation = nullptr;
   bool _dnsStarted = false;
   bool _otaInProgress = false;
   bool _otaRejected = false;
@@ -31,6 +34,9 @@ private:
   void handleState();
   void handleSettingsGet();
   void handleSettingsSave();
+  void handleAutomationGet();
+  void handleTimer();
+  void handleSchedule();
   void handleRelay();
   void handleWifiScan();
   void handleOtaPassword();

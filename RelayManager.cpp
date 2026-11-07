@@ -4,9 +4,13 @@ const uint8_t RelayManager::PINS[4] = {5, 4, 14, 12}; // D1,D2,D5,D6
 
 void RelayManager::begin(ConfigManager& cfg) {
   _cfg = &cfg;
-  // Active-low default: preload the OFF latch before enabling the outputs.
+  const bool activeLow = _cfg->config().relayActiveLow != 0;
+  const uint8_t offLevel = activeLow ? HIGH : LOW;
+
+  // Preload the OFF level before switching each GPIO to OUTPUT.
+  // This prevents an Active-High module from receiving an ON pulse.
   for (uint8_t i = 0; i < 4; i++) {
-    digitalWrite(PINS[i], HIGH);
+    digitalWrite(PINS[i], offLevel);
     pinMode(PINS[i], OUTPUT);
   }
   restore();
@@ -15,7 +19,8 @@ void RelayManager::begin(ConfigManager& cfg) {
 void RelayManager::writePin(uint8_t index, bool on) {
   if (index >= 4 || !_cfg) return;
   const bool activeLow = _cfg->config().relayActiveLow != 0;
-  digitalWrite(PINS[index], (on ^ activeLow) ? HIGH : LOW);
+  const uint8_t level = (on ^ activeLow) ? HIGH : LOW;
+  digitalWrite(PINS[index], level);
 }
 
 void RelayManager::restore() {
@@ -54,5 +59,5 @@ bool RelayManager::get(uint8_t index) const {
 
 void RelayManager::allOff() {
   for (uint8_t i = 0; i < 4; i++) set(i, false, false);
-  _cfg->saveState();
+  if (_cfg) _cfg->saveState();
 }

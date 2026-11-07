@@ -2,5 +2,6 @@
 .vscode/
 *.pyc
 __pycache__/
-
 .piofs/
+artifacts/
+dist/

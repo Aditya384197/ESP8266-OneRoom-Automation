@@ -1,69 +1,77 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#07101d">
-<meta name="color-scheme" content="dark">
-<title>Room Automation</title>
-<link rel="stylesheet" href="/style.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0a1020">
+  <meta name="color-scheme" content="dark">
+  <meta name="description" content="Local four-channel smart room automation">
+  <title>Room Automation</title>
+  <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-<div class="ambient ambient-a"></div><div class="ambient ambient-b"></div>
-<main class="shell">
-<header class="topbar">
-  <div class="brand"><div class="brand-mark">RA</div><div><div class="eyebrow">ESP8266 · ONE ROOM</div><h1>Room Automation</h1></div></div>
-  <div id="connection" class="status offline"><span class="status-dot"></span>CONNECTING</div>
-</header>
+  <div class="ambient ambient-one"></div><div class="ambient ambient-two"></div>
+  <main class="shell">
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Room Automation home">
+        <span class="brand-icon">RA</span>
+        <span><small>ESP8266 · SMART ROOM</small><strong>Room Automation</strong></span>
+      </a>
+      <div class="top-actions">
+        <span id="connection" class="status offline"><i></i>Connecting</span>
+        <a class="icon-button" href="/settings.html" aria-label="Settings" title="Settings">⚙</a>
+      </div>
+    </header>
 
-<section class="hero card">
-  <div><div class="eyebrow">LIVE CONTROL</div><h2>Your room, at a glance.</h2>
-  <p>Saved relay states are restored automatically after power returns.</p></div>
-  <div class="hero-meta"><span>FIRMWARE</span><strong id="version">—</strong></div>
-</section>
+    <section class="hero glass">
+      <div class="hero-copy">
+        <span class="eyebrow">CONTROL CENTER</span>
+        <h1>Your space.<br><em>Under control.</em></h1>
+        <p>Local-first automation. Relay controls and physical switches continue working without cloud or internet access.</p>
+        <div class="hero-foot"><span class="live-indicator"><i></i> LIVE DEVICE STATUS</span><span id="version">Firmware —</span></div>
+      </div>
+      <div class="hero-orbit" aria-hidden="true"><div class="orbit-ring ring-a"></div><div class="orbit-ring ring-b"></div><div class="orbit-core"><span>4</span><small>CHANNELS</small></div><b class="orbit-dot dot-a"></b><b class="orbit-dot dot-b"></b><b class="orbit-dot dot-c"></b></div>
+    </section>
 
-<section class="section-head"><div><div class="eyebrow">APPLIANCES</div><h2>Control center</h2></div><div class="live-pill"><span class="pulse"></span>LIVE STATE</div></section>
+    <section class="section-heading">
+      <div><span class="eyebrow">APPLIANCES</span><h2>Relay control</h2></div>
+      <span class="section-note">GPIO map · D1 / D2 / D5 / D6</span>
+    </section>
+    <section id="relayGrid" class="relay-grid">
+      <article class="relay-card glass" data-index="0"><div class="relay-head"><span class="appliance-icon">⌁</span><span class="relay-tag">RELAY 01 · GPIO5</span></div><div class="relay-details"><h3 data-relay-name="0">Ceiling Fan</h3><p>Relay 1 · D1 output</p></div><div class="relay-actions"><span class="relay-state">OFF</span><button class="power-button" data-toggle="0" aria-pressed="false"><span></span>Power</button></div></article>
+      <article class="relay-card glass" data-index="1"><div class="relay-head"><span class="appliance-icon">＋</span><span class="relay-tag">RELAY 02 · GPIO4</span></div><div class="relay-details"><h3 data-relay-name="1">Charging Socket</h3><p>Relay 2 · D2 output</p></div><div class="relay-actions"><span class="relay-state">OFF</span><button class="power-button" data-toggle="1" aria-pressed="false"><span></span>Power</button></div></article>
+      <article class="relay-card glass" data-index="2"><div class="relay-head"><span class="appliance-icon light">✦</span><span class="relay-tag">RELAY 03 · GPIO14</span></div><div class="relay-details"><h3 data-relay-name="2">LED 1</h3><p>Relay 3 · D5 output</p></div><div class="relay-actions"><span class="relay-state">OFF</span><button class="power-button" data-toggle="2" aria-pressed="false"><span></span>Power</button></div></article>
+      <article class="relay-card glass" data-index="3"><div class="relay-head"><span class="appliance-icon light">✦</span><span class="relay-tag">RELAY 04 · GPIO12</span></div><div class="relay-details"><h3 data-relay-name="3">LED 2</h3><p>Relay 4 · D6 output</p></div><div class="relay-actions"><span class="relay-state">OFF</span><button class="power-button" data-toggle="3" aria-pressed="false"><span></span>Power</button></div></article>
+    </section>
 
-<section class="relay-grid compact-relays" id="relayGrid">
-  <article class="relay-card card" data-index="0">
-    <div class="relay-top"><div class="device-icon fan-icon">⌁</div><span class="relay-channel">RELAY 01 · D1</span></div>
-    <div class="relay-info"><h3>Ceiling Fan</h3><p>Room cooling</p></div>
-    <button class="power-control" data-toggle="0" aria-pressed="false"><span class="power-ring"></span><span class="power-label">OFF</span></button>
-  </article>
-  <article class="relay-card card" data-index="1">
-    <div class="relay-top"><div class="device-icon socket-icon">＋</div><span class="relay-channel">RELAY 02 · D2</span></div>
-    <div class="relay-info"><h3>Charging Socket</h3><p>Power outlet</p></div>
-    <button class="power-control" data-toggle="1" aria-pressed="false"><span class="power-ring"></span><span class="power-label">OFF</span></button>
-  </article>
-  <article class="relay-card card" data-index="2">
-    <div class="relay-top"><div class="device-icon led-icon">✦</div><span class="relay-channel">RELAY 03 · D5</span></div>
-    <div class="relay-info"><h3>LED 1</h3><p>Room lighting</p></div>
-    <button class="power-control" data-toggle="2" aria-pressed="false"><span class="power-ring"></span><span class="power-label">OFF</span></button>
-  </article>
-  <article class="relay-card card" data-index="3">
-    <div class="relay-top"><div class="device-icon led-icon">✦</div><span class="relay-channel">RELAY 04 · D6</span></div>
-    <div class="relay-info"><h3>LED 2</h3><p>Room lighting</p></div>
-    <button class="power-control" data-toggle="3" aria-pressed="false"><span class="power-ring"></span><span class="power-label">OFF</span></button>
-  </article>
-</section>
+    <section class="section-heading section-gap"><div><span class="eyebrow">AUTOMATION</span><h2>Countdown timers</h2></div><span id="clockStatus" class="section-note">Checking clock…</span></section>
+    <section id="timerGrid" class="timer-grid">
+      <article class="timer-card glass" data-timer="0"><div class="timer-top"><strong>Relay 1</strong><span class="timer-remaining">No timer</span></div><div class="timer-controls"><input class="timer-seconds" type="number" min="1" max="2592000" inputmode="numeric" placeholder="Seconds"><select class="timer-action"><option value="false">Turn OFF after</option><option value="true">Turn ON after</option></select></div><div class="timer-buttons"><button class="button primary timer-start">Start timer</button><button class="button subtle timer-cancel">Cancel</button></div></article>
+      <article class="timer-card glass" data-timer="1"><div class="timer-top"><strong>Relay 2</strong><span class="timer-remaining">No timer</span></div><div class="timer-controls"><input class="timer-seconds" type="number" min="1" max="2592000" inputmode="numeric" placeholder="Seconds"><select class="timer-action"><option value="false">Turn OFF after</option><option value="true">Turn ON after</option></select></div><div class="timer-buttons"><button class="button primary timer-start">Start timer</button><button class="button subtle timer-cancel">Cancel</button></div></article>
+      <article class="timer-card glass" data-timer="2"><div class="timer-top"><strong>Relay 3</strong><span class="timer-remaining">No timer</span></div><div class="timer-controls"><input class="timer-seconds" type="number" min="1" max="2592000" inputmode="numeric" placeholder="Seconds"><select class="timer-action"><option value="false">Turn OFF after</option><option value="true">Turn ON after</option></select></div><div class="timer-buttons"><button class="button primary timer-start">Start timer</button><button class="button subtle timer-cancel">Cancel</button></div></article>
+      <article class="timer-card glass" data-timer="3"><div class="timer-top"><strong>Relay 4</strong><span class="timer-remaining">No timer</span></div><div class="timer-controls"><input class="timer-seconds" type="number" min="1" max="2592000" inputmode="numeric" placeholder="Seconds"><select class="timer-action"><option value="false">Turn OFF after</option><option value="true">Turn ON after</option></select></div><div class="timer-buttons"><button class="button primary timer-start">Start timer</button><button class="button subtle timer-cancel">Cancel</button></div></article>
+    </section>
 
-<section class="section-head compact"><div><div class="eyebrow">SYSTEM</div><h2>Controller status</h2></div></section>
-<section class="telemetry-grid">
-  <div class="metric card"><span>STA IP</span><strong id="ip">—</strong></div>
-  <div class="metric card"><span>AP IP</span><strong id="apIp">—</strong></div>
-  <div class="metric card"><span>WI-FI SIGNAL</span><strong id="rssi">—</strong></div>
-  <div class="metric card"><span>FREE HEAP</span><strong id="heap">—</strong></div>
-  <div class="metric card"><span>UPTIME</span><strong id="uptime">—</strong></div>
-  <div class="metric card"><span>AP CLIENTS</span><strong id="apClients">—</strong></div>
-</section>
+    <section class="section-heading section-gap"><div><span class="eyebrow">WEEKLY ROUTINES</span><h2>Schedules</h2></div><span class="section-note">Up to 8 rules · India time</span></section>
+    <section class="schedule-layout">
+      <form id="scheduleForm" class="schedule-form glass">
+        <div class="form-title"><span class="eyebrow">NEW AUTOMATION</span><strong>Create a schedule</strong></div>
+        <label>Appliance<select id="scheduleRelay"><option value="0">Relay 1</option><option value="1">Relay 2</option><option value="2">Relay 3</option><option value="3">Relay 4</option></select></label>
+        <label>Action<select id="scheduleAction"><option value="true">Turn ON</option><option value="false">Turn OFF</option></select></label>
+        <label>Time<input id="scheduleTime" type="time" value="07:00" required></label>
+        <div class="day-picker"><span>Repeat on</span><div class="days"><label><input type="checkbox" value="0" checked><b>S</b></label><label><input type="checkbox" value="1" checked><b>M</b></label><label><input type="checkbox" value="2" checked><b>T</b></label><label><input type="checkbox" value="3" checked><b>W</b></label><label><input type="checkbox" value="4" checked><b>T</b></label><label><input type="checkbox" value="5" checked><b>F</b></label><label><input type="checkbox" value="6" checked><b>S</b></label></div></div>
+        <button class="button primary full" type="submit">＋ Save schedule</button>
+      </form>
+      <div class="schedule-list glass"><div class="form-title"><span class="eyebrow">ACTIVE RULES</span><strong>Your schedules</strong></div><div id="scheduleItems" class="schedule-items"><p class="empty-note">No schedules configured.</p></div><p class="schedule-help">Schedules require a valid NTP clock. They run locally on the ESP8266 after time synchronization; they do not depend on Firebase.</p></div>
+    </section>
 
-<nav class="bottom-nav card">
-  <a class="nav-primary" href="/settings.html"><span>⚙</span> Settings</a>
-  <button id="rebootBtn" class="nav-secondary"><span>↻</span> Reboot</button>
-</nav>
-<p id="message" class="toast" role="status"></p>
-<footer>Local controller · no cloud required · state stored on device</footer>
-</main>
-<script src="/app.js"></script>
+    <section class="section-heading section-gap"><div><span class="eyebrow">DEVICE HEALTH</span><h2>System overview</h2></div></section>
+    <section class="metrics-grid">
+      <div class="metric glass"><span>STA ADDRESS</span><strong id="ip">—</strong></div><div class="metric glass"><span>AP ADDRESS</span><strong id="apIp">—</strong></div><div class="metric glass"><span>WI-FI SIGNAL</span><strong id="rssi">—</strong></div><div class="metric glass"><span>FREE HEAP</span><strong id="heap">—</strong></div><div class="metric glass"><span>UPTIME</span><strong id="uptime">—</strong></div><div class="metric glass"><span>AP CLIENTS</span><strong id="apClients">—</strong></div>
+    </section>
+    <div class="footer-bar"><span id="message" class="toast" role="status" aria-live="polite"></span><button id="rebootBtn" class="button subtle">↻ Reboot controller</button></div>
+    <footer>Local-first controller · AP fallback always available · Relay state stored on device</footer>
+  </main>
+  <script src="/app.js"></script>
 </body>
 </html>

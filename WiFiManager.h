@@ -14,6 +14,7 @@ public:
   void applySettings();
 
   bool staConnected() const;
+  bool timeSynced() const;
   String ipString() const;
   String apIpString() const;
   IPAddress apAddress() const;
@@ -27,6 +28,8 @@ private:
   unsigned long _lastAttempt = 0;
   unsigned long _backoff = 1000;
   bool _mdnsStarted = false;
+  bool _ntpStarted = false;
+  bool _connectPending = false;
 
   void startAP();
   void connectSTA();
