@@ -1,67 +1,60 @@
-# ESP8266 One Room Automation — v1.6.0
+# ESP8266 OneRoom Automation — v1.7.0
 
-A local-first four-relay controller for a NodeMCU ESP8266 with a clean relay-only dashboard, multi-client asynchronous web server and a separate slide-style settings area.
+A local-first four-relay controller for NodeMCU ESP8266. The local web dashboard, physical switch, countdown timers and weekly schedules work without Firebase or internet. Firebase is an optional remote-control channel; it never replaces local control.
 
-## Hardware pin map (unchanged)
+## Hardware pin map
 
-| NodeMCU pin | GPIO | Function |
+| NodeMCU pin | ESP8266 GPIO | Function |
 |---|---:|---|
 | D1 | GPIO5 | Relay 1 |
 | D2 | GPIO4 | Relay 2 |
 | D5 | GPIO14 | Relay 3 |
 | D6 | GPIO12 | Relay 4 |
-| D7 | GPIO13 | Factory-reset button (hold LOW for 10 seconds) |
+| D0 | GPIO16 | One configurable maintained physical switch input |
+| D7 | GPIO13 | Factory-reset button; hold LOW for 10 seconds |
 
-Relay output pin mapping is fixed. Each relay independently supports Active-Low or Active-High mode from **Settings → Relay configuration**. The factory default remains Active-Low for all four relays. Verify each relay type with a low-voltage test load before connecting mains equipment.
+The four relay output pins are fixed and are not configurable. Every relay independently supports Active-Low or Active-High mode. Verify each relay board with a low-voltage test load before connecting mains equipment. Use a suitable regulated relay supply; do not power relay coils from the ESP8266 3.3V output.
 
-Power relay coils from a suitable regulated supply. Do not power relay coils from the ESP8266 3.3V output. Mains wiring and enclosure work must be performed safely by a qualified person.
+### D0 / GPIO16 switch wiring
 
-## Dashboard
+Only one physical maintained switch is supported directly by this version. In **Settings → Relay configuration**, select which of the four relays the switch controls.
 
-- Main page shows only the editable logo, one Online/Offline indicator and four large square relay tiles.
-- Tap anywhere on a relay tile to toggle it. The ON state uses a green visual treatment; OFF returns to the normal tile appearance.
-- Dashboard labels and non-input text are not selectable/copyable. Text fields in Settings remain selectable and editable.
-- Online means the ESP8266 is connected to the configured home Wi-Fi (STA). Offline means it is running its local access point without a home Wi-Fi connection.
-- The logo text is configurable up to 255 characters; its container grows and wraps to fit.
+- Add an external **10 kΩ pull-up resistor from D0/GPIO16 to 3.3V**. GPIO16 does not provide the usual internal `INPUT_PULLUP` mode.
+- Connect the dry-contact switch between D0/GPIO16 and GND.
+- Closed to GND = ON; open = OFF.
+- Use 3.3V logic only. Never connect mains voltage to D0 or any ESP8266 GPIO.
+- Keep the existing factory-reset button on D7/GPIO13. Do not move the switch to D7.
 
-## Multi-client web access
+The selected relay is owned by the maintained physical switch. Dashboard/manual, countdown timer, weekly schedule and Firebase commands cannot override it. Its timer and schedule entries are disabled when the relay is assigned to the switch. Other relays continue to work normally.
 
-The dashboard is served by ESPAsyncWebServer with ESPAsyncTCP. The older synchronous ESP8266WebServer handled requests one at a time and could make settings controls appear unresponsive while another phone held a connection. Wi-Fi scanning is also non-blocking: the scan starts in the background and the browser polls for its result.
+## Dashboard and settings
 
-## Settings menu
+- Main page: editable logo, Wi-Fi status and four large relay cards.
+- Relay taps update optimistically, then reconcile with the device response; a rejected command rolls back the card state.
+- Settings retain slide navigation and separate pages for relay configuration, Wi-Fi, timers/schedules, OTA and recovery.
+- Relay names and polarity save through `/api/relay-config` without reboot. Wi-Fi settings use `/api/settings` and restart to apply network changes.
 
-Each group opens as an individual slide-style page with a back control:
+## Firebase remote access
 
-- Custom logo
-- Relay names, individual relay polarity and physical switch mapping
-- ESP8266 access-point and home-router Wi-Fi configuration, including network scan
-- Countdown timers and weekly schedules
-- OTA password creation/change
-- OTA firmware upload
-- Remote access safety/setup information
-- Device status, restart and factory reset
+Firmware supports Firebase Authentication Email/Password REST sign-in, refresh-token rotation, Realtime Database REST polling, command acknowledgement and actual-state reporting.
 
-## Physical switch inputs — four extra digital inputs
+- Configure a **dedicated device-only Firebase Authentication account** in Settings → Remote access. Do not use the Admin account.
+- Before saving in the device UI, create the single Admin Authentication account, set its immutable UID in `firebase.database.rules.json`, publish the rules, create the device account, and add its `deviceAccounts/{uid}` record. Follow `FIREBASE_SETUP.md` exactly.
+- Authentication uses the Firebase `accounts:signInWithPassword` endpoint; the firmware retains a refresh token and refreshes short-lived ID tokens. Realtime Database REST requests send that ID token using the `auth` query parameter.
+- TLS certificate verification remains enabled using the bundled Google Trust Services root CA set in `FirebaseCerts.h`. The code does not use `setInsecure()`.
+- The device account may read its own device node and write only the actual `state` and `commandAck` for its mapped device. It cannot approve users or send user relay commands.
+- The Android app will later create only `users/{uid}` records in `pending` state. Only the one fixed Admin UID may approve/reject/revoke users or create `userDevices/{uid}/{deviceId}` access links.
+- Relay commands are idempotent desired states, for example `commands/relay1 = {"id":"unique-command-id","value":true}`. Always use a new unique ID for each new command. The ESP8266 publishes the last processed ID to `commandAck` and reports its actual relay states, `physicalSwitchRelay`, `online`, `lastSeen`, uptime, RSSI and free heap.
+- `lastSeen` is the reliable heartbeat. When the device loses power or Wi-Fi, it cannot immediately publish `online:false`; the app should consider a device online only while `lastSeen` is recent (for example, within 30 seconds).
 
-The four wall-switch inputs are provided by a **PCF8574 I/O expander**. This is intentional: with the four relay outputs fixed to D1/D2/D5/D6 and the factory-reset input on D7, the remaining native ESP8266 pins include boot-strap and UART pins. Connecting four maintained GND switches directly to those pins can prevent boot or interfere with serial operation. The PCF8574 provides four additional switch GPIO inputs without using those pins as direct switch terminals.
-
-| PCF8574 input | Relay | Switch behavior |
-|---|---:|---|
-| P0 (virtual ID 32) | Relay 1 | Closed to GND = ON; open = OFF |
-| P1 (virtual ID 33) | Relay 2 | Closed to GND = ON; open = OFF |
-| P2 (virtual ID 34) | Relay 3 | Closed to GND = ON; open = OFF |
-| P3 (virtual ID 35) | Relay 4 | Closed to GND = ON; open = OFF |
-
-**PCF8574 wiring:** power VCC from the ESP8266 3.3V pin and GND to GND; tie A0/A1/A2 to GND for I²C address `0x20`; connect SDA to NodeMCU D3/GPIO0 and SCL to D4/GPIO2. Both I²C lines must be pulled up to 3.3V (typically 4.7kΩ; verify whether the module already contains pull-ups). Connect each maintained wall switch between its own P0/P1/P2/P3 input and GND. Do not wire the wall switches directly to D3/D4. Never connect mains voltage to the PCF8574 or ESP8266.
-
-The device retries PCF8574 detection after a temporary I²C failure. If the expander is absent, local phone control and all other firmware features remain available, but physical switch input is inactive until the expander is connected. In **Maintained** mode the physical switch position is authoritative (closed forces ON; open forces OFF), so a phone command that conflicts with the current physical position is immediately overridden. Select **Follow contact on change** when you want each physical opening/closing transition to command OFF/ON while still allowing phone commands to remain effective until the next physical movement.
+**Security and performance limits:** Do not forward the ESP8266 local HTTP port or OTA route to the public internet. Firebase API key is a project identifier, while the refresh token is a secret. The refresh token is stored in LittleFS, which is not encrypted by this firmware and can be read by someone with physical flash access. The ESP8266 HTTP/TLS client is synchronous; an HTTPS operation can temporarily delay its cooperative main loop. The physical switch is not a safety-rated emergency stop or mains disconnect. Google Trust Services roots should be reviewed and refreshed periodically as certificate chains and CA policies change.
 
 ## Timers and schedules
 
-- One independent countdown timer per relay (from 1 second to 30 days). In Settings, enter hours/minutes and choose the final ON/OFF action.
-- Timer state is stored in LittleFS. A five-minute checkpoint limits flash writes.
-- When NTP time is available, timers retain an absolute due time and can account for time spent powered off. If the device reboots without a valid clock, there is no battery-backed RTC to measure the outage; the fallback resumes from its last saved checkpoint and may be late by the outage plus up to approximately five minutes.
-- Up to eight weekly schedules, using India Standard Time (UTC+05:30). Weekly schedules require NTP synchronization and pause until the clock is synchronized.
+- One independent countdown per relay, from 1 second to 30 days.
+- A five-minute timer checkpoint limits LittleFS writes.
+- When NTP is available, a timer keeps an absolute due time and can account for powered-off time. Without a valid clock at reboot, the monotonic fallback resumes from the most recent saved checkpoint; outage time cannot be measured without a battery-backed RTC.
+- Up to eight weekly schedules use India Standard Time (UTC+05:30) and remain paused until NTP time is synchronized.
 
 ## Wi-Fi and OTA
 
@@ -73,25 +66,14 @@ Password: RA8266@Setup2026
 IP:       192.168.4.1
 ```
 
-Change the AP password after first connection. Router credentials are stored on the device and are never returned by the settings API. Leave a password field blank to keep its current saved password.
+Change the AP password after first setup. Router credentials are stored locally and are not returned by the settings API. OTA remains disabled until the owner creates a private OTA password. Upload `firmware.bin` to the OTA page; `littlefs.bin` is a filesystem image, not an OTA firmware image.
 
-OTA update is disabled until the owner creates an OTA password in Settings. Previously saved private OTA credentials are retained; the publicly documented v1.3.0 factory OTA credential hash is cleared during upgrade. Only upload a `firmware.bin` built for this board to the OTA form. `littlefs.bin` is a filesystem image and is not an OTA firmware image.
+## Storage and migration
 
-## Remote access — security status
-
-This package does **not** create a public remote tunnel by itself. The ESP8266 serves a local HTTP dashboard; exposing its port 80 directly with router port-forwarding would expose relay control and firmware update operations without TLS. Do not forward port 80/OTA to the public internet.
-
-For safe off-site access, use a VPN-capable home router or an always-on gateway on the same LAN (for example, a device running a private VPN such as Tailscale/WireGuard). Connect the phone to that VPN and then open the ESP8266's private LAN IP. This is a separate gateway configuration; the Remote access menu explains the requirement and clearly reports that no tunnel is configured. Firebase/cloud remote control and user approval are not active in this firmware.
-
-## Storage compatibility and reliability
-
-- Existing DeviceConfig and RelayState records remain compatible.
-- The previous automation record is migrated in-place. The v1.5 record keeps relay names, logo text, relay polarity, timers and schedules; its former raw ESP GPIO switch assignments are intentionally remapped to PCF8574 P0–P3. Older v1 records keep relay names, timers and schedules, while newly added logo/polarity fields receive safe defaults.
-- The new automation record stores logo text and four independent relay polarity values with CRC validation and a backup file.
-- Files are written through temporary-file and backup-rename handling.
-- Each relay's OFF electrical level is prepared before its GPIO is switched to output.
-- Relay output pins remain D1/D2/D5/D6.
-- Wi-Fi reconnection uses backoff and the AP remains available when the router is unavailable.
+- DeviceConfig and RelayState remain compatible.
+- The automation record is migrated to v4. Relay names, logo, relay polarity, timers and schedules are preserved from v1/v2/v3. Old PCF8574/virtual GPIO switch mappings are intentionally disabled; select the single D0/GPIO16 switch after physically wiring its pull-up and dry contact.
+- Firebase configuration is stored separately in `/firebase.bin` with CRC and a backup file. The device password and short-lived ID token are not stored; only the refresh token is retained.
+- Configuration writes use a temporary file and backup-rename handling.
 
 ## Build
 
@@ -100,33 +82,18 @@ pio run -e nodemcuv2
 pio run -e nodemcuv2 -t buildfs
 ```
 
-`platformio.ini` configures NodeMCU v2, 4 MB flash, LittleFS and the `eagle.flash.4m1m.ld` layout. `prepare_fs.py` copies root web assets to `.piofs` before building the filesystem.
+The PlatformIO environment targets NodeMCU v2, 4 MB flash, LittleFS and `eagle.flash.4m1m.ld`. GitHub Actions produces both images and a ZIP with build information and SHA-256 checksums:
 
-GitHub Actions generates:
+- `firmware.bin` → flash address `0x00000`
+- `littlefs.bin` → flash address `0x300000`
 
-- `firmware.bin` — ESP8266 application
-- `littlefs.bin` — dashboard/settings filesystem
-- A ZIP release bundle with build information and SHA-256 checksums
+Use both files from the same successful workflow run. Flashing `littlefs.bin` overwrites the filesystem and may erase saved Wi-Fi, OTA and Firebase configuration. Back up settings before flashing where possible.
 
-For the configured 4 MB / 1 MB LittleFS layout, the normal PlatformIO ESP8266 flash offsets are `firmware.bin` at `0x00000` and `littlefs.bin` at `0x300000`. Confirm the board is the 4 MB NodeMCU v2 and use both files from the same workflow run. Flashing LittleFS replaces its contents; it may erase saved settings and credentials.
+## v1.7.0 changes
 
-## v1.6.0 changes
-
-- Replaced the single-client synchronous ESP8266 HTTP server with the maintained ESP32Async asynchronous server and ESP8266 TCP library. This permits multiple phones/browsers to load and use settings routes concurrently.
-- Corrected request-body ownership to use a bounded, request-scoped heap buffer that is safely released when the request ends, including aborted requests.
-- Fixed OTA upload arbitration so a second client cannot mark the first client's upload as rejected.
-- Kept a single one-level Back control and a Home shortcut in the settings header on every settings subpage.
-- Kept logo saving on its dedicated `/api/logo` endpoint, which stores only the logo value and does not unnecessarily rewrite Wi-Fi settings or restart the board.
-- Added PCF8574-based four-channel switch input support, maintained-switch semantics (closed to GND = ON), boot-safe I²C wiring guidance, and periodic expander reconnect attempts.
-
-## v1.5.0 baseline features retained
-
-- Replaced the busy main page with a minimal logo/status/four-relay layout.
-- Made each whole relay tile tappable, with separate ON/OFF styling.
-- Disabled long-press text selection/copy across dashboard and settings labels while preserving editable form fields.
-- Reorganized all configuration into a compact slide-style settings menu and subpages.
-- Added editable dashboard logo text (up to 255 characters).
-- Added independent Active-Low/Active-High selection and persistence for each relay output.
-- Added in-place migration from the previous automation storage format.
-- Moved timers, schedules, Wi-Fi, OTA and recovery controls into their own settings sections.
-- Added an explicit remote-access safety page; a secure VPN gateway is still required for off-site access.
+- Replaced the previous PCF8574 four-input scheme with one direct maintained switch on D0/GPIO16; kept D7/GPIO13 reserved for factory reset.
+- Enforced physical-switch priority in the main automation loop, manual API, timers, weekly schedules and Firebase commands.
+- Split relay names/polarity/switch selection into a dedicated no-reboot API and immediately reapplied relay output levels after polarity changes.
+- Added Firebase Authentication device-account sign-in, verified TLS REST access, refresh-token rotation, RTDB command polling/acknowledgement and actual-state heartbeat reporting.
+- Added a fixed-Admin-UID RTDB rules template and `FIREBASE_SETUP.md` provisioning instructions for the later Android app's pending/approved/rejected/revoked flow.
+- Fixed dashboard optimistic rendering so it does not momentarily change Wi-Fi status or overwrite relay names.

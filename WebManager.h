@@ -13,11 +13,13 @@
 #include "RelayManager.h"
 #include "WiFiManager.h"
 #include "AutomationManager.h"
+#include "FirebaseManager.h"
 
 class WebManager {
 public:
   void begin(ConfigManager& cfg, RelayManager& relays,
-             WiFiController& wifi, AutomationManager& automation);
+             WiFiController& wifi, AutomationManager& automation,
+             FirebaseManager& firebase);
   void loop();
   bool otaInProgress() const { return _otaInProgress; }
 
@@ -30,6 +32,7 @@ private:
   RelayManager* _relays = nullptr;
   WiFiController* _wifi = nullptr;
   AutomationManager* _automation = nullptr;
+  FirebaseManager* _firebase = nullptr;
   bool _dnsStarted = false;
   bool _otaInProgress = false;
   bool _otaRejected = false;
@@ -44,6 +47,10 @@ private:
   void handleState(AsyncWebServerRequest* request);
   void handleSettingsGet(AsyncWebServerRequest* request);
   void handleSettingsSave(AsyncWebServerRequest* request, JsonDocument& doc);
+  void handleRelayConfigSave(AsyncWebServerRequest* request, JsonDocument& doc);
+  void handleFirebaseGet(AsyncWebServerRequest* request);
+  void handleFirebaseSave(AsyncWebServerRequest* request, JsonDocument& doc);
+  void handleFirebaseDelete(AsyncWebServerRequest* request);
   void handleLogoSave(AsyncWebServerRequest* request, JsonDocument& doc);
   void handleAutomationGet(AsyncWebServerRequest* request);
   void handleTimer(AsyncWebServerRequest* request, JsonDocument& doc);

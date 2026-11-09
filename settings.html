@@ -26,7 +26,7 @@
         <button class="settings-menu-item" type="button" data-open="automation"><span class="menu-icon">◷</span><span class="menu-copy"><strong>Timers and schedules</strong><small>Countdowns and weekly automation rules</small></span><span class="menu-arrow">›</span></button>
         <button class="settings-menu-item" type="button" data-open="otapass"><span class="menu-icon">⌑</span><span class="menu-copy"><strong>OTA password</strong><small>Create or change firmware-update password</small></span><span class="menu-arrow">›</span></button>
         <button class="settings-menu-item" type="button" data-open="otaupdate"><span class="menu-icon">⇧</span><span class="menu-copy"><strong>OTA firmware update</strong><small>Upload a firmware .bin file from this phone</small></span><span class="menu-arrow">›</span></button>
-        <button class="settings-menu-item" type="button" data-open="remote"><span class="menu-icon">◎</span><span class="menu-copy"><strong>Remote access</strong><small>Secure remote-access requirements and setup</small></span><span class="menu-arrow">›</span></button>
+        <button class="settings-menu-item" type="button" data-open="remote"><span class="menu-icon">◎</span><span class="menu-copy"><strong>Remote access</strong><small>Firebase Authentication and secure cloud relay sync</small></span><span class="menu-arrow">›</span></button>
         <button class="settings-menu-item" type="button" data-open="system"><span class="menu-icon">⚙</span><span class="menu-copy"><strong>System and recovery</strong><small>Device information, restart and factory reset</small></span><span class="menu-arrow">›</span></button>
       </div>
       <p class="settings-footer">Local control keeps working without internet. Network and cloud features are optional.</p>
@@ -54,13 +54,10 @@
           <p class="form-note">Active-Low means the relay turns ON when its GPIO output is LOW. Active-High means it turns ON when the output is HIGH.</p>
         </div>
         <div class="panel-card">
-          <h2>Four physical wall-switch inputs</h2>
-          <p class="help">These four inputs are provided by a PCF8574 I/O-expander module. Each switch connects its assigned P pin to GND. Maintained mode: closed = relay ON and open = relay OFF (physical position overrides phone commands). Transition-follow mode: a closed transition commands ON and an open transition commands OFF; phone commands remain effective until the physical switch moves again.</p>
-          <div class="switch-config-row"><label class="field">Relay 1 input<select id="switchPin0"><option value="32">PCF8574 · P0</option><option value="-1">Disabled</option></select></label><label class="field">Switch action<select id="switchMode0"><option value="1">Maintained · closed = ON (physical priority)</option><option value="0">Follow contact on change (phone override)</option></select></label></div>
-          <div class="switch-config-row"><label class="field">Relay 2 input<select id="switchPin1"><option value="33">PCF8574 · P1</option><option value="-1">Disabled</option></select></label><label class="field">Switch action<select id="switchMode1"><option value="1">Maintained · closed = ON (physical priority)</option><option value="0">Follow contact on change (phone override)</option></select></label></div>
-          <div class="switch-config-row"><label class="field">Relay 3 input<select id="switchPin2"><option value="34">PCF8574 · P2</option><option value="-1">Disabled</option></select></label><label class="field">Switch action<select id="switchMode2"><option value="1">Maintained · closed = ON (physical priority)</option><option value="0">Follow contact on change (phone override)</option></select></label></div>
-          <div class="switch-config-row"><label class="field">Relay 4 input<select id="switchPin3"><option value="35">PCF8574 · P3</option><option value="-1">Disabled</option></select></label><label class="field">Switch action<select id="switchMode3"><option value="1">Maintained · closed = ON (physical priority)</option><option value="0">Follow contact on change (phone override)</option></select></label></div>
-          <div class="warning-note"><strong>Hardware required:</strong> Connect one PCF8574 module at I²C address 0x20, powered from 3.3V. Connect SDA to NodeMCU D3/GPIO0 and SCL to D4/GPIO2. Keep both I²C lines pulled up to 3.3V (typically 4.7kΩ). Connect each wall switch only between PCF8574 P0/P1/P2/P3 and GND. Do not connect wall switches directly to GPIO0/GPIO2; these are ESP8266 boot pins. Never connect mains voltage to the expander or ESP8266.</div>
+          <h2>One direct physical wall switch</h2>
+          <p class="help">The single switch uses NodeMCU D0 / ESP8266 GPIO16. Select which relay it controls. This is a maintained switch: closed to GND = ON; open = OFF. The physical switch has priority over dashboard, timer, weekly schedule and Firebase commands for that relay.</p>
+          <label class="field">Relay controlled by physical switch<select id="switchRelay"><option value="-1">Disabled</option><option value="0">Relay 1 · D1 · GPIO5</option><option value="1">Relay 2 · D2 · GPIO4</option><option value="2">Relay 3 · D5 · GPIO14</option><option value="3">Relay 4 · D6 · GPIO12</option></select></label>
+          <div class="warning-note"><strong>Required wiring:</strong> GPIO16/D0 has no usable internal pull-up. Add an external 10kΩ resistor from D0/GPIO16 to 3.3V. Connect the dry-contact switch between D0/GPIO16 and GND. Use 3.3V logic only. Never connect mains voltage to this pin. Keep the existing factory-reset button on D7/GPIO13; do not bridge D7 to the physical switch.</div>
         </div>
         <div class="settings-button-row"><button class="action-button" type="submit">Save relay configuration</button></div>
         <p id="relayMessage" class="message" role="status"></p>
@@ -136,13 +133,25 @@
     </section>
 
     <section class="settings-panel" data-panel="remote">
-      <div class="panel-top"><div class="panel-title"><small>NETWORK ACCESS</small><h1>Remote access</h1></div></div>
-      <div class="panel-card"><div class="remote-status"><i></i><strong>Remote tunnel not configured</strong></div>
-        <p class="help" style="margin-top:12px">The ESP8266 web server currently provides local-network access. It cannot safely create a public HTTPS tunnel by itself. Do not expose its HTTP port 80 directly to the internet.</p>
-        <h2>Safe remote-access method</h2>
-        <ol class="remote-steps"><li>Use a VPN-capable home router, or a small always-on gateway on the same home network.</li><li>Run a private VPN such as Tailscale on that router or gateway.</li><li>Connect your phone to the same private VPN when away from home.</li><li>Open the ESP8266's home-network IP address in the browser. Local control continues to work when internet is unavailable.</li></ol>
-        <div class="warning-note"><strong>Why this is not enabled automatically:</strong> direct port forwarding would expose an unencrypted local control page and firmware-update endpoint to the public internet. A proper remote gateway needs separate VPN/tunnel credentials and a trusted endpoint.</div>
-        <p class="form-note">The dashboard remains local-only until a separate secure gateway is configured. This menu does not claim that remote control is already active.</p>
+      <div class="panel-top"><div class="panel-title"><small>FIREBASE CLOUD</small><h1>Remote access</h1></div></div>
+      <form id="firebaseForm">
+        <div class="panel-card">
+          <div class="remote-status"><i></i><strong id="firebaseStatus">Firebase is not configured</strong></div>
+          <p class="help" style="margin-top:12px">Connect this ESP8266 to Firebase Authentication and Realtime Database. The ESP8266 uses a dedicated device-only Authentication account; it never stores the Admin password and never approves users.</p>
+          <label class="field">Realtime Database URL<input id="firebaseUrl" type="url" maxlength="120" placeholder="https://your-project-default-rtdb.firebaseio.com" required></label>
+          <label class="field">Firebase Web API key<input id="firebaseApiKey" type="password" maxlength="45" autocomplete="off" placeholder="Paste Firebase Web API key" required></label>
+          <label class="field">Device ID<input id="firebaseDeviceId" type="text" maxlength="39" value="room8266" required></label>
+          <label class="field">Device account email<input id="firebaseEmail" type="email" maxlength="79" autocomplete="off" required></label>
+          <label class="field">Device account password<input id="firebasePassword" type="password" maxlength="64" autocomplete="new-password" required></label>
+          <p class="form-note">The password is used only for the initial sign-in and is not saved. The device stores the Firebase refresh token in LittleFS. ESP8266 flash is not encrypted, so the refresh token is still physically readable from extracted flash.</p>
+          <div class="settings-button-row"><button id="firebaseSaveBtn" class="action-button" type="submit">Verify and save Firebase connection</button><button id="firebaseDisableBtn" class="action-button danger" type="button">Disable Firebase</button></div>
+          <p id="firebaseMessage" class="message" role="status"></p>
+        </div>
+      </form>
+      <div class="panel-card">
+        <h2>Authentication and approval model</h2>
+        <ol class="remote-steps"><li>Create one Admin user in Firebase Authentication and put that exact UID in <code>firebase.database.rules.json</code>. Do not create Admin from the public app.</li><li>Create a separate Firebase Authentication email/password user for this ESP8266. In Realtime Database, create <code>deviceAccounts/DEVICE_UID</code> with <code>{&quot;deviceId&quot;:&quot;room8266&quot;,&quot;enabled&quot;:true}</code>.</li><li>Apply the included database rules. The Android app will register users as <code>pending</code>; only the fixed Admin UID can approve/reject/revoke them and link approved users to devices.</li><li>Local AP, physical switch, timer and schedules continue to work without internet. Remote commands are applied as desired ON/OFF states and the actual relay state is published back.</li></ol>
+        <div class="warning-note"><strong>Security:</strong> never expose port 80 on the ESP8266 to the public internet. Firebase HTTPS is certificate-verified. Firebase API key is a project identifier; the device refresh token is a secret, but ESP8266 flash is not encrypted.</div>
       </div>
     </section>
 
@@ -150,7 +159,7 @@
       <div class="panel-top"><div class="panel-title"><small>DEVICE</small><h1>System and recovery</h1></div></div>
       <div class="panel-card"><h2>Device status</h2><div class="field-grid"><div><p class="form-note">Firmware</p><strong id="systemVersion">—</strong></div><div><p class="form-note">Local access point</p><strong id="systemApIp">—</strong></div><div><p class="form-note">Home Wi-Fi</p><strong id="systemWifi">—</strong></div><div><p class="form-note">Free memory</p><strong id="systemHeap">—</strong></div></div></div>
       <div class="panel-card"><h2>Restart controller</h2><p class="help">Restart the ESP8266 without deleting its saved settings.</p><button id="rebootBtn" class="action-button secondary" type="button">Restart device</button><p id="systemMessage" class="message" role="status"></p></div>
-      <div class="panel-card"><h2>Factory reset</h2><p class="help">Clears saved Wi-Fi credentials, relay settings, names, timers, schedules and OTA password.</p><button id="factoryBtn" class="action-button danger" type="button">Factory reset</button></div>
+      <div class="panel-card"><h2>Factory reset</h2><p class="help">Clears Wi-Fi credentials, relay settings, names, timers, schedules, Firebase credentials and OTA password.</p><button id="factoryBtn" class="action-button danger" type="button">Factory reset</button></div>
     </section>
   </main>
 
@@ -183,6 +192,7 @@ function openPanel(name) {
   panel.style.display = 'block';
   requestAnimationFrame(() => panel.classList.add('visible'));
   if (name === 'automation') refreshAutomation();
+  if (name === 'remote') loadFirebaseSettings();
   if (name === 'system') refreshSystem();
 }
 function goBackOneLevel() {
@@ -220,24 +230,15 @@ async function loadSettings() {
   for (let i = 0; i < 4; i += 1) {
     $(`relayName${i}`).value = loaded.relayNames?.[i] || `Relay ${i + 1}`;
     $(`relayPolarity${i}`).value = String(loaded.relayActiveLow?.[i] ?? true);
-    $(`switchPin${i}`).value = String(loaded.switchPins?.[i] ?? -1);
-    $(`switchMode${i}`).value = String(loaded.switchMode?.[i] ?? 1);
   }
+  $('switchRelay').value = String(loaded.switchRelay ?? -1);
 }
 function settingsPayload() {
-  const relayNames = [0,1,2,3].map(i => $(`relayName${i}`).value.trim());
-  const relayActiveLow = [0,1,2,3].map(i => $(`relayPolarity${i}`).value === 'true');
-  const switchPins = [0,1,2,3].map(i => Number($(`switchPin${i}`).value));
-  const switchActiveLow = [true, true, true, true];
-  const switchMode = [0,1,2,3].map(i => Number($(`switchMode${i}`).value));
-  if (relayNames.some((name) => !name || name.length > 23)) throw new Error('Each relay name must be 1 to 23 characters.');
-  if (new Set(switchPins.filter(pin => pin !== -1)).size !== switchPins.filter(pin => pin !== -1).length) throw new Error('A PCF8574 input cannot be assigned more than once.');
   return {
     logoText: $('logoText').value.trim() || 'Room Automation',
     apSsid: $('apSsid').value.trim(), apPassword: $('apPassword').value,
     apChannel: Number($('apChannel').value), staSsid: $('staSsid').value.trim(),
-    staPassword: $('staPassword').value, deviceName: $('deviceName').value.trim(),
-    relayNames, relayActiveLow, switchPins, switchActiveLow, switchMode
+    staPassword: $('staPassword').value, deviceName: $('deviceName').value.trim()
   };
 }
 async function saveAllSettings(targetMessage) {
@@ -252,13 +253,56 @@ $('saveLogo').addEventListener('click', async () => {
 });
 $('relayForm').addEventListener('submit', async (event) => {
   event.preventDefault();
-  try { await saveAllSettings('relayMessage'); }
-  catch (error) { message('relayMessage', error.message, false); }
+  try {
+    const relayNames = [0,1,2,3].map(i => $(`relayName${i}`).value.trim());
+    const relayActiveLow = [0,1,2,3].map(i => $(`relayPolarity${i}`).value === 'true');
+    if (relayNames.some(name => !name || name.length > 23)) throw new Error('Each relay name must be 1 to 23 characters.');
+    const data = await postJson('/api/relay-config', { relayNames, relayActiveLow, switchRelay: Number($('switchRelay').value) });
+    message('relayMessage', data.message || 'Relay configuration saved.');
+  } catch (error) { message('relayMessage', error.message, false); }
 });
 $('wifiForm').addEventListener('submit', async (event) => {
   event.preventDefault();
   try { await saveAllSettings('wifiMessage'); }
   catch (error) { message('wifiMessage', error.message, false); }
+});
+
+async function loadFirebaseSettings() {
+  try {
+    const data = await api('/api/firebase');
+    $('firebaseUrl').value = data.databaseUrl || '';
+    $('firebaseDeviceId').value = data.deviceId || 'room8266';
+    $('firebaseEmail').value = data.deviceEmail || '';
+    $('firebaseApiKey').value = '';
+    $('firebasePassword').value = '';
+    $('firebaseStatus').textContent = data.configured ? `${data.status} · last sync ${data.lastSyncAgeSec}s ago` : 'Firebase is not configured';
+    if (data.lastError) message('firebaseMessage', data.lastError, false);
+  } catch (error) { message('firebaseMessage', error.message, false); }
+}
+$('firebaseForm').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const button = $('firebaseSaveBtn');
+  button.disabled = true;
+  try {
+    const data = await postJson('/api/firebase', {
+      databaseUrl: $('firebaseUrl').value.trim(), apiKey: $('firebaseApiKey').value.trim(),
+      deviceId: $('firebaseDeviceId').value.trim(), deviceEmail: $('firebaseEmail').value.trim(),
+      devicePassword: $('firebasePassword').value
+    });
+    $('firebasePassword').value = '';
+    $('firebaseApiKey').value = '';
+    message('firebaseMessage', data.message || 'Firebase connection saved.');
+    await loadFirebaseSettings();
+  } catch (error) { message('firebaseMessage', error.message, false); }
+  finally { button.disabled = false; }
+});
+$('firebaseDisableBtn').addEventListener('click', async () => {
+  if (!window.confirm('Disable Firebase cloud access on this device? Local control will continue working.')) return;
+  try {
+    const data = await api('/api/firebase', { method: 'DELETE' });
+    message('firebaseMessage', data.message || 'Firebase disabled.');
+    await loadFirebaseSettings();
+  } catch (error) { message('firebaseMessage', error.message, false); }
 });
 
 $('scanBtn').addEventListener('click', async () => {

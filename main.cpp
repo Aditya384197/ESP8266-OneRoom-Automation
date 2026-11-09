@@ -9,6 +9,7 @@
 #include "WiFiManager.h"
 #include "WebManager.h"
 #include "AutomationManager.h"
+#include "FirebaseManager.h"
 
 static constexpr uint8_t FACTORY_RESET_PIN = 13; // NodeMCU D7
 static constexpr unsigned long FACTORY_HOLD_MS = 10000UL;
@@ -17,6 +18,7 @@ ConfigManager configManager;
 RelayManager relayManager;
 WiFiController wifiController;
 AutomationManager automationManager;
+FirebaseManager firebaseManager;
 WebManager webManager;
 
 static unsigned long factoryPressedAt = 0;
@@ -90,11 +92,13 @@ void setup() {
   if (!configManager.load()) Serial.println(F("Config load failed; defaults may be in use."));
   if (!configManager.loadState()) Serial.println(F("Relay state load failed; defaults may be in use."));
   if (!configManager.loadAutomation()) Serial.println(F("Automation load failed; defaults may be in use."));
+  if (!configManager.loadFirebase()) Serial.println(F("Firebase config load failed; cloud access disabled."));
 
   relayManager.begin(configManager);
   automationManager.begin(configManager, relayManager);
   wifiController.begin(configManager);
-  webManager.begin(configManager, relayManager, wifiController, automationManager);
+  firebaseManager.begin(configManager, relayManager, wifiController, automationManager);
+  webManager.begin(configManager, relayManager, wifiController, automationManager, firebaseManager);
   setupOTA();
 
   Serial.printf("AP: %s / %s\n", configManager.config().apSsid, wifiController.apIpString().c_str());
@@ -109,6 +113,7 @@ void loop() {
   ArduinoOTA.handle();
   webManager.loop();
   automationManager.loop(wifiController.timeSynced());
+  firebaseManager.loop();
   checkFactoryButton();
 
   const unsigned long now = millis();

@@ -2,6 +2,7 @@
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 let state = [false, false, false, false];
+let physicalPriority = [false, false, false, false];
 const pending = new Set();
 
 function showMessage(text, error = false) {
@@ -27,21 +28,28 @@ function setConnection(online) {
 }
 
 function renderState(data) {
-  setConnection(!!data.wifiConnected);
+  if (typeof data.wifiConnected === 'boolean') setConnection(data.wifiConnected);
   if (typeof data.logoText === 'string' && data.logoText.trim()) $('#logoText').textContent = data.logoText;
-  const names = Array.isArray(data.relayNames) ? data.relayNames : [];
-  if (Array.isArray(data.relays)) state = data.relays.slice(0, 4).map(Boolean);
+  const names = Array.isArray(data.relayNames) ? data.relayNames : null;
+  if (Array.isArray(data.relays)) {
+    data.relays.slice(0, 4).forEach((value, index) => {
+      if (!pending.has(index)) state[index] = !!value;
+    });
+  }
+  if (Array.isArray(data.physicalPriority)) physicalPriority = data.physicalPriority.slice(0, 4).map(Boolean);
   $$('.relay-card').forEach((card) => {
     const index = Number(card.dataset.index);
     const isOn = !!state[index];
     const name = $('[data-relay-name]', card);
-    const label = names[index] || `Relay ${index + 1}`;
-    if (name && name.textContent !== label) name.textContent = label;
+    const label = names ? (names[index] || `Relay ${index + 1}`) : null;
+    if (name && label && name.textContent !== label) name.textContent = label;
     card.classList.toggle('active', isOn);
     card.setAttribute('aria-pressed', String(isOn));
     $('.relay-state', card).textContent = isOn ? 'ON' : 'OFF';
     card.classList.toggle('pending', pending.has(index));
-    card.disabled = pending.has(index);
+    card.classList.toggle('physical-priority', !!physicalPriority[index]);
+    card.disabled = pending.has(index) || !!physicalPriority[index];
+    card.title = physicalPriority[index] ? 'Controlled by the physical wall switch' : '';
   });
 }
 
@@ -52,24 +60,26 @@ async function refreshState() {
 
 async function toggleRelay(card) {
   const index = Number(card.dataset.index);
-  if (pending.has(index)) return;
+  if (pending.has(index) || physicalPriority[index]) return;
+  const previous = !!state[index];
+  const desired = !previous;
   pending.add(index);
-  card.classList.add('pending');
-  card.disabled = true;
+  state[index] = desired; // Optimistic update: animate immediately on tap.
+  renderState({ relays: state, physicalPriority });
   try {
     const data = await api('/api/relay', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ index, on: !state[index] })
+      body: JSON.stringify({ index, on: desired })
     });
     renderState(data);
   } catch (error) {
+    state[index] = previous; // Roll back if the device rejects or cannot save it.
+    renderState({ relays: state, physicalPriority });
     showMessage(error.message, true);
-    await refreshState();
   } finally {
     pending.delete(index);
-    card.classList.remove('pending');
-    card.disabled = false;
+    await refreshState();
   }
 }
 

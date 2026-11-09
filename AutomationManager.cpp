@@ -1,14 +1,11 @@
 #include "AutomationManager.h"
 #include <time.h>
-#include <Wire.h>
 
 static constexpr unsigned long SWITCH_DEBOUNCE_MS = 45UL;
 static constexpr unsigned long SWITCH_SAMPLE_INTERVAL_MS = 10UL;
 static constexpr unsigned long TIMER_SAVE_INTERVAL_MS = 300000UL; // 5-minute checkpoint to limit flash wear
 static constexpr uint32_t MAX_TIMER_SECONDS = 2592000UL;
-static constexpr uint8_t SWITCH_EXPANDER_ADDRESS = 0x20; // PCF8574 A0-A2 = GND
-static constexpr uint8_t SWITCH_I2C_SDA_GPIO = 0;         // NodeMCU D3
-static constexpr uint8_t SWITCH_I2C_SCL_GPIO = 2;         // NodeMCU D4
+static constexpr uint8_t PHYSICAL_SWITCH_GPIO = 16; // NodeMCU D0; external pull-up required
 
 void AutomationManager::begin(ConfigManager& cfg, RelayManager& relays) {
   _cfg = &cfg;
@@ -33,87 +30,34 @@ const AutomationConfig& AutomationManager::config() const {
 
 void AutomationManager::beginSwitches() {
   if (!_cfg || !_relays) return;
-  const AutomationConfig& a = _cfg->automation();
-  bool needsExpander = false;
+
+  // GPIO16 / D0 has no usable internal pull-up on ESP8266. The wiring must
+  // provide an external 10k pull-up to 3.3V and a dry contact to GND.
+  bool configured = false;
   for (uint8_t i = 0; i < 4; ++i) {
-    if (a.switchPin[i] >= 32 && a.switchPin[i] <= 35) needsExpander = true;
+    if (_cfg->automation().switchPin[i] != PHYSICAL_SWITCH_GPIO) continue;
+    configured = true;
+    pinMode(PHYSICAL_SWITCH_GPIO, INPUT);
+    const bool pressed = digitalRead(PHYSICAL_SWITCH_GPIO) == LOW;
+    _switches[i].rawPressed = pressed;
+    _switches[i].stablePressed = pressed;
+    _switches[i].changedAt = millis();
+    // A maintained switch owns this relay from the first stable sample.
+    _relays->set(i, pressed, false);
   }
-  _needsExpander = needsExpander;
-  if (!needsExpander) {
-    _expanderAvailable = false;
-    return;
-  }
-
-  _lastExpanderRetryAt = millis();
-  // The PCF8574 is powered at 3.3 V. I2C pull-ups must hold SDA/SCL HIGH
-  // during reset because GPIO0/D3 and GPIO2/D4 are ESP8266 boot-strap pins.
-  // External switches connect only to PCF8574 P0-P3 and GND.
-  Wire.begin(SWITCH_I2C_SDA_GPIO, SWITCH_I2C_SCL_GPIO);
-  Wire.setClock(100000);
-  Wire.beginTransmission(SWITCH_EXPANDER_ADDRESS);
-  Wire.write(0xFF); // Release all quasi-bidirectional port pins for input.
-  if (Wire.endTransmission() != 0) {
-    _expanderAvailable = false;
-    Serial.println(F("PCF8574 not detected at 0x20; physical switch inputs are waiting."));
-    return;
-  }
-
-  _expanderAvailable = true;
-  if (!readExpander(_expanderBits)) {
-    _expanderAvailable = false;
-    Serial.println(F("PCF8574 read failed; physical switch inputs are waiting."));
-    return;
-  }
-
-  const unsigned long now = millis();
-  for (uint8_t i = 0; i < 4; ++i) {
-    const uint8_t pin = a.switchPin[i];
-    if (pin < 32 || pin > 35) continue;
-    _switches[i].rawPressed = readSwitchPressed(pin, true, _expanderBits);
-    _switches[i].stablePressed = _switches[i].rawPressed;
-    _switches[i].changedAt = now;
-    // Align the relay to the physical contact once at startup in both modes.
-    // Mode 1 keeps enforcing the input level; mode 0 permits phone overrides
-    // until the next physical contact transition.
-    _relays->set(i, _switches[i].stablePressed, false);
-  }
-  Serial.println(F("PCF8574 physical switch inputs ready (P0-P3)."));
-}
-
-bool AutomationManager::readExpander(uint8_t& bits) {
-  if (!_expanderAvailable) return false;
-  const uint8_t received = Wire.requestFrom(SWITCH_EXPANDER_ADDRESS, (uint8_t)1);
-  if (received != 1 || !Wire.available()) {
-    _expanderAvailable = false;
-    return false;
-  }
-  bits = (uint8_t)Wire.read();
-  return true;
-}
-
-bool AutomationManager::readSwitchPressed(uint8_t virtualPin, bool activeLow,
-                                          uint8_t expanderBits) const {
-  if (virtualPin < 32 || virtualPin > 35) return false;
-  const bool high = (expanderBits & (1U << (virtualPin - 32U))) != 0;
-  return activeLow ? !high : high;
+  if (configured) Serial.println(F("Physical switch ready on D0/GPIO16 (external pull-up required)."));
 }
 
 void AutomationManager::scanSwitches() {
-  if (!_cfg || !_relays || !_needsExpander) return;
+  if (!_cfg || !_relays) return;
   const unsigned long now = millis();
   if ((unsigned long)(now - _lastSwitchScanAt) < SWITCH_SAMPLE_INTERVAL_MS) return;
   _lastSwitchScanAt = now;
-  if (!_expanderAvailable) {
-    if ((unsigned long)(now - _lastExpanderRetryAt) >= 3000UL) beginSwitches();
-    return;
-  }
-  if (!readExpander(_expanderBits)) return;
 
   const AutomationConfig& a = _cfg->automation();
   for (uint8_t i = 0; i < 4; ++i) {
-    const uint8_t pin = a.switchPin[i];
-    if (pin < 32 || pin > 35) continue;
-    const bool pressed = readSwitchPressed(pin, true, _expanderBits);
+    if (a.switchPin[i] != PHYSICAL_SWITCH_GPIO) continue;
+    const bool pressed = digitalRead(PHYSICAL_SWITCH_GPIO) == LOW;
     if (pressed != _switches[i].rawPressed) {
       _switches[i].rawPressed = pressed;
       _switches[i].changedAt = now;
@@ -121,14 +65,23 @@ void AutomationManager::scanSwitches() {
     if ((unsigned long)(now - _switches[i].changedAt) >= SWITCH_DEBOUNCE_MS &&
         _switches[i].stablePressed != _switches[i].rawPressed) {
       _switches[i].stablePressed = _switches[i].rawPressed;
-      // Transition-follow mode: closed edge commands ON, open edge commands
-      // OFF. A phone command remains in effect until the physical switch moves.
-      if (a.switchMode[i] == 0) _relays->set(i, _switches[i].stablePressed, true);
-    }
-    if (a.switchMode[i] == 1 && _relays->get(i) != _switches[i].stablePressed) {
+      _relays->set(i, _switches[i].stablePressed, true);
+    } else if (_relays->get(i) != _switches[i].stablePressed) {
+      // Maintained-level priority: manual, timer, schedule and cloud requests
+      // cannot leave this relay in a state that contradicts the contact.
       _relays->set(i, _switches[i].stablePressed, true);
     }
   }
+}
+
+bool AutomationManager::physicalPriorityRelay(uint8_t relay) const {
+  return _cfg && relay < 4 &&
+         _cfg->automation().switchPin[relay] == PHYSICAL_SWITCH_GPIO;
+}
+
+void AutomationManager::reloadSwitchConfig() {
+  for (uint8_t i = 0; i < 4; ++i) _switches[i] = SwitchRuntime{};
+  beginSwitches();
 }
 
 void AutomationManager::loop(bool timeSynced) {
@@ -140,7 +93,7 @@ void AutomationManager::loop(bool timeSynced) {
 
 bool AutomationManager::setTimer(uint8_t relay, bool turnOn,
                                  uint32_t seconds, bool timeSynced) {
-  if (!_cfg || relay >= 4 || seconds > MAX_TIMER_SECONDS) return false;
+  if (!_cfg || relay >= 4 || seconds > MAX_TIMER_SECONDS || physicalPriorityRelay(relay)) return false;
 
   RelayTimerConfig& timer = _cfg->automation().timers[relay];
   const RelayTimerConfig previous = timer;
@@ -165,6 +118,7 @@ bool AutomationManager::setTimer(uint8_t relay, bool turnOn,
 bool AutomationManager::cancelTimer(uint8_t relay) {
   if (!_cfg || relay >= 4) return false;
   RelayTimerConfig& timer = _cfg->automation().timers[relay];
+  if (!timer.enabled && timer.dueEpoch == 0 && timer.remainingSec == 0 && _timerEndMs[relay] == 0) return true;
   const RelayTimerConfig previous = timer;
   const unsigned long previousEnd = _timerEndMs[relay];
   timer.enabled = 0;
@@ -209,7 +163,7 @@ void AutomationManager::processTimers(bool timeSynced) {
 
   for (uint8_t i = 0; i < 4; ++i) {
     RelayTimerConfig& timer = _cfg->automation().timers[i];
-    if (!timer.enabled) continue;
+    if (!timer.enabled || physicalPriorityRelay(i)) continue;
 
     if (_timerEndMs[i] == 0 && timer.remainingSec > 0) {
       _timerEndMs[i] = nowMs + (unsigned long)timer.remainingSec * 1000UL;
@@ -267,7 +221,7 @@ void AutomationManager::processSchedules(bool timeSynced) {
 
   for (uint8_t i = 0; i < 8; ++i) {
     ScheduleRule& rule = _cfg->automation().schedules[i];
-    if (!rule.enabled || rule.minuteOfDay != minute ||
+    if (!rule.enabled || physicalPriorityRelay(rule.relay) || rule.minuteOfDay != minute ||
         (rule.daysMask & dayBit) == 0 || rule.lastRunDay == dayKey) {
       continue;
     }
@@ -287,7 +241,7 @@ void AutomationManager::processSchedules(bool timeSynced) {
 bool AutomationManager::setSchedule(uint8_t slot, uint8_t relay, bool turnOn,
                                     uint8_t daysMask, uint16_t minuteOfDay,
                                     bool enabled) {
-  if (!_cfg || slot >= 8 || relay >= 4 || daysMask == 0 || daysMask > 0x7F || minuteOfDay > 1439) return false;
+  if (!_cfg || slot >= 8 || relay >= 4 || daysMask == 0 || daysMask > 0x7F || minuteOfDay > 1439 || physicalPriorityRelay(relay)) return false;
   ScheduleRule& rule = _cfg->automation().schedules[slot];
   const ScheduleRule previous = rule;
   rule.enabled = enabled ? 1 : 0;

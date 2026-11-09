@@ -5,7 +5,9 @@ static constexpr uint32_t CONFIG_MAGIC = 0x4F524143UL; // ORAC
 static constexpr uint32_t STATE_MAGIC  = 0x4F524153UL; // ORAS
 static constexpr uint32_t AUTOMATION_MAGIC = 0x4F524141UL; // ORAA
 static constexpr uint16_t FORMAT_VERSION = 1;
-static constexpr uint16_t AUTOMATION_VERSION = 3;
+static constexpr uint16_t AUTOMATION_VERSION = 4;
+static constexpr uint32_t FIREBASE_MAGIC = 0x4F524146UL; // ORAF
+static constexpr uint16_t FIREBASE_VERSION = 1;
 
 static const char* DEFAULT_AP_SSID = "RoomAutomation-ESP";
 static const char* DEFAULT_AP_PASS = "RA8266@Setup2026";
@@ -46,10 +48,9 @@ void ConfigManager::defaultAutomation() {
   _automation.magic = AUTOMATION_MAGIC;
   _automation.version = AUTOMATION_VERSION;
 
-  // Four maintained inputs are provided by an external PCF8574 expander.
-  // Virtual pin IDs 32..35 correspond to PCF8574 P0..P3 respectively.
-  // The switches close to GND (Active-Low): closed = relay ON, open = OFF.
-  const uint8_t pins[4] = {32, 33, 34, 35};
+  // One direct maintained switch may be assigned to GPIO16 / NodeMCU D0.
+  // Disabled by default until the external pull-up and switch are wired.
+  const uint8_t pins[4] = {255, 255, 255, 255};
   const uint8_t activeLow[4] = {1, 1, 1, 1};
   const char* names[4] = {"Ceiling Fan", "Charging Socket", "LED 1", "LED 2"};
   strlcpy(_automation.logoText, "Room Automation", sizeof(_automation.logoText));
@@ -65,6 +66,13 @@ void ConfigManager::defaultAutomation() {
     _automation.schedules[i].lastRunDay = -1;
   }
   updateAutomationCrc();
+}
+
+void ConfigManager::defaultFirebase() {
+  memset(&_firebase, 0, sizeof(_firebase));
+  _firebase.magic = FIREBASE_MAGIC;
+  _firebase.version = FIREBASE_VERSION;
+  updateFirebaseCrc();
 }
 
 bool ConfigManager::load() {
@@ -100,8 +108,9 @@ bool ConfigManager::loadAutomation() {
     ScheduleRule schedules[8];
     uint32_t crc32;
   };
-  // v2 has the same layout as the current v3 record. Only the meaning of
-  // switchPin changed from raw ESP GPIOs to virtual PCF8574 P0-P3 inputs.
+  // v2/v3 are retained for safe on-device migration. The v4 firmware no
+  // longer supports PCF8574 virtual pins; all old expander assignments are
+  // intentionally disabled until the owner wires and selects GPIO16/D0.
   struct LegacyAutomationConfigV2 {
     uint32_t magic;
     uint16_t version;
@@ -123,12 +132,50 @@ bool ConfigManager::loadAutomation() {
     return stored == crc32(bytes, size);
   };
   auto installSwitchDefaults = [&]() {
-    const uint8_t ports[4] = {32, 33, 34, 35};
     for (uint8_t i = 0; i < 4; ++i) {
-      _automation.switchPin[i] = ports[i];
+      _automation.switchPin[i] = 255;
       _automation.switchActiveLow[i] = 1;
       _automation.switchMode[i] = 1;
     }
+  };
+
+  struct LegacyAutomationConfigV3 {
+    uint32_t magic;
+    uint16_t version;
+    uint16_t reserved;
+    uint8_t switchPin[4];
+    uint8_t switchActiveLow[4];
+    uint8_t switchMode[4];
+    char relayName[4][24];
+    char logoText[256];
+    uint8_t relayActiveLow[4];
+    RelayTimerConfig timers[4];
+    ScheduleRule schedules[8];
+    uint32_t crc32;
+  };
+
+  auto migrateV3 = [&](const char* path) -> bool {
+    File f = LittleFS.open(path, "r");
+    if (!f || (size_t)f.size() != sizeof(LegacyAutomationConfigV3)) {
+      if (f) f.close();
+      return false;
+    }
+    LegacyAutomationConfigV3 old{};
+    const size_t n = f.read((uint8_t*)&old, sizeof(old));
+    f.close();
+    if (n != sizeof(old) || old.magic != AUTOMATION_MAGIC || old.version != 3) return false;
+    const uint32_t stored = old.crc32;
+    old.crc32 = 0;
+    if (!validLegacyCrc(&old, sizeof(old), stored)) return false;
+    defaultAutomation();
+    memcpy(_automation.relayName, old.relayName, sizeof(old.relayName));
+    strlcpy(_automation.logoText, old.logoText, sizeof(_automation.logoText));
+    memcpy(_automation.relayActiveLow, old.relayActiveLow, sizeof(old.relayActiveLow));
+    memcpy(_automation.timers, old.timers, sizeof(old.timers));
+    memcpy(_automation.schedules, old.schedules, sizeof(old.schedules));
+    installSwitchDefaults();
+    updateAutomationCrc();
+    return saveAutomation();
   };
 
   auto migrateV2 = [&](const char* path) -> bool {
@@ -180,6 +227,7 @@ bool ConfigManager::loadAutomation() {
   };
 
   if (loadBinary("/automation.bin", "/automation.bak", &_automation, sizeof(_automation))) return true;
+  if (migrateV3("/automation.bin") || migrateV3("/automation.bak")) return true;
   if (migrateV2("/automation.bin") || migrateV2("/automation.bak")) return true;
   if (migrateV1("/automation.bin") || migrateV1("/automation.bak")) return true;
   defaultAutomation();
@@ -206,7 +254,27 @@ bool ConfigManager::factoryReset() {
   defaults();
   defaultState();
   defaultAutomation();
-  return save() && saveState() && saveAutomation();
+  defaultFirebase();
+  return save() && saveState() && saveAutomation() && saveFirebase();
+}
+
+bool ConfigManager::loadFirebase() {
+  if (loadBinary("/firebase.bin", "/firebase.bak", &_firebase, sizeof(_firebase))) return true;
+  defaultFirebase();
+  return saveFirebase();
+}
+
+bool ConfigManager::saveFirebase() {
+  updateFirebaseCrc();
+  return saveBinary("/firebase.bin", "/firebase.bak", &_firebase, sizeof(_firebase));
+}
+
+bool ConfigManager::clearFirebase() {
+  const FirebaseConfig previous = _firebase;
+  defaultFirebase();
+  if (saveFirebase()) return true;
+  _firebase = previous;
+  return false;
 }
 
 bool ConfigManager::loadBinary(const char* path, const char* backup, void* data, size_t size) {
@@ -222,6 +290,7 @@ bool ConfigManager::loadBinary(const char* path, const char* backup, void* data,
     if (size == sizeof(DeviceConfig)) return validateConfig(*(DeviceConfig*)data);
     if (size == sizeof(RelayState)) return validateState(*(RelayState*)data);
     if (size == sizeof(AutomationConfig)) return validateAutomation(*(AutomationConfig*)data);
+    if (size == sizeof(FirebaseConfig)) return validateFirebase(*(FirebaseConfig*)data);
     return false;
   };
 
@@ -294,7 +363,7 @@ bool ConfigManager::validateAutomation(const AutomationConfig& a) const {
   if (logoLen == 0 || logoLen >= sizeof(a.logoText)) return false;
   for (uint8_t i = 0; i < 4; ++i) {
     const uint8_t pin = a.switchPin[i];
-    if (pin != 255 && (pin < 32 || pin > 35)) return false;
+    if (pin != 255 && pin != 16) return false;
     if (a.switchActiveLow[i] > 1 || a.switchMode[i] > 1 || a.relayActiveLow[i] > 1) return false;
     const size_t nameLen = strnlen(a.relayName[i], sizeof(a.relayName[i]));
     if (nameLen == 0 || nameLen >= sizeof(a.relayName[i])) return false;
@@ -315,6 +384,24 @@ bool ConfigManager::validateAutomation(const AutomationConfig& a) const {
   return stored == crc32((const uint8_t*)&tmp, sizeof(tmp));
 }
 
+bool ConfigManager::validateFirebase(const FirebaseConfig& f) const {
+  if (f.magic != FIREBASE_MAGIC || f.version != FIREBASE_VERSION || f.enabled > 1) return false;
+  const size_t urlLen = strnlen(f.databaseUrl, sizeof(f.databaseUrl));
+  const size_t keyLen = strnlen(f.apiKey, sizeof(f.apiKey));
+  const size_t idLen = strnlen(f.deviceId, sizeof(f.deviceId));
+  const size_t emailLen = strnlen(f.deviceEmail, sizeof(f.deviceEmail));
+  const size_t uidLen = strnlen(f.deviceUid, sizeof(f.deviceUid));
+  const size_t tokenLen = strnlen(f.refreshToken, sizeof(f.refreshToken));
+  if (f.enabled && (urlLen < 12 || urlLen >= sizeof(f.databaseUrl) ||
+      keyLen < 20 || keyLen >= sizeof(f.apiKey) || idLen == 0 || idLen >= sizeof(f.deviceId) ||
+      emailLen == 0 || emailLen >= sizeof(f.deviceEmail) || uidLen == 0 || uidLen >= sizeof(f.deviceUid) ||
+      tokenLen == 0 || tokenLen >= sizeof(f.refreshToken))) return false;
+  FirebaseConfig tmp = f;
+  const uint32_t stored = tmp.crc32;
+  tmp.crc32 = 0;
+  return stored == crc32((const uint8_t*)&tmp, sizeof(tmp));
+}
+
 void ConfigManager::updateConfigCrc() {
   _config.crc32 = 0;
   _config.crc32 = crc32((const uint8_t*)&_config, sizeof(_config));
@@ -328,6 +415,11 @@ void ConfigManager::updateStateCrc() {
 void ConfigManager::updateAutomationCrc() {
   _automation.crc32 = 0;
   _automation.crc32 = crc32((const uint8_t*)&_automation, sizeof(_automation));
+}
+
+void ConfigManager::updateFirebaseCrc() {
+  _firebase.crc32 = 0;
+  _firebase.crc32 = crc32((const uint8_t*)&_firebase, sizeof(_firebase));
 }
 
 uint32_t ConfigManager::crc32(const uint8_t* data, size_t len) const {

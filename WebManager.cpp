@@ -25,11 +25,13 @@ static void sendJson(AsyncWebServerRequest* request, int code, const String& bod
 }
 
 void WebManager::begin(ConfigManager& cfg, RelayManager& relays,
-                       WiFiController& wifi, AutomationManager& automation) {
+                       WiFiController& wifi, AutomationManager& automation,
+                       FirebaseManager& firebase) {
   _cfg = &cfg;
   _relays = &relays;
   _wifi = &wifi;
   _automation = &automation;
+  _firebase = &firebase;
   setupRoutes();
   startCaptiveDNS();
   _server.begin();
@@ -156,6 +158,14 @@ void WebManager::setupRoutes() {
   onJson("/api/settings", HTTP_POST, [this](AsyncWebServerRequest* request, JsonDocument& doc) {
     handleSettingsSave(request, doc);
   });
+  onJson("/api/relay-config", HTTP_POST, [this](AsyncWebServerRequest* request, JsonDocument& doc) {
+    handleRelayConfigSave(request, doc);
+  });
+  _server.on("/api/firebase", HTTP_GET, [this](AsyncWebServerRequest* request) { handleFirebaseGet(request); });
+  onJson("/api/firebase", HTTP_POST, [this](AsyncWebServerRequest* request, JsonDocument& doc) {
+    handleFirebaseSave(request, doc);
+  });
+  _server.on("/api/firebase", HTTP_DELETE, [this](AsyncWebServerRequest* request) { handleFirebaseDelete(request); });
   onJson("/api/logo", HTTP_POST, [this](AsyncWebServerRequest* request, JsonDocument& doc) {
     handleLogoSave(request, doc);
   });
@@ -216,9 +226,11 @@ void WebManager::handleState(AsyncWebServerRequest* request) {
   doc["logoText"] = _cfg->automation().logoText;
   JsonArray relays = doc["relays"].to<JsonArray>();
   JsonArray names = doc["relayNames"].to<JsonArray>();
+  JsonArray physicalPriority = doc["physicalPriority"].to<JsonArray>();
   for (uint8_t i = 0; i < 4; ++i) {
     relays.add(_relays->get(i));
     names.add(_cfg->automation().relayName[i]);
+    physicalPriority.add(_automation->physicalPriorityRelay(i));
   }
   String out;
   serializeJson(doc, out);
@@ -242,13 +254,16 @@ void WebManager::handleSettingsGet(AsyncWebServerRequest* request) {
   JsonArray switchActiveLow = doc["switchActiveLow"].to<JsonArray>();
   JsonArray switchMode = doc["switchMode"].to<JsonArray>();
   JsonArray relayActiveLow = doc["relayActiveLow"].to<JsonArray>();
+  int switchRelay = -1;
   for (uint8_t i = 0; i < 4; ++i) {
     names.add(a.relayName[i]);
     switchPins.add(a.switchPin[i] == 255 ? -1 : a.switchPin[i]);
+    if (a.switchPin[i] == 16) switchRelay = i;
     switchActiveLow.add(a.switchActiveLow[i] != 0);
     switchMode.add(a.switchMode[i]);
     relayActiveLow.add(a.relayActiveLow[i] != 0);
   }
+  doc["switchRelay"] = switchRelay;
   String out;
   serializeJson(doc, out);
   sendJson(request, 200, out);
@@ -309,50 +324,6 @@ void WebManager::handleSettingsSave(AsyncWebServerRequest* request, JsonDocument
   strlcpy(nextConfig.deviceName, deviceName.c_str(), sizeof(nextConfig.deviceName));
   strlcpy(nextAutomation.logoText, logoText.c_str(), sizeof(nextAutomation.logoText));
 
-  if (doc["relayActiveLow"].is<JsonArray>()) {
-    JsonArrayConst values = doc["relayActiveLow"].as<JsonArrayConst>();
-    if (values.size() != 4) { jsonError(request, 400, "Exactly four relay polarity values are required"); return; }
-    for (uint8_t i = 0; i < 4; ++i) nextAutomation.relayActiveLow[i] = values[i].as<bool>() ? 1 : 0;
-  }
-  if (doc["relayNames"].is<JsonArray>()) {
-    JsonArrayConst names = doc["relayNames"].as<JsonArrayConst>();
-    if (names.size() != 4) { jsonError(request, 400, "Exactly four relay names are required"); return; }
-    for (uint8_t i = 0; i < 4; ++i) {
-      const String name = names[i] | "";
-      if (!validText(name, 23, false) || name.length() == 0) { jsonError(request, 400, "Invalid relay name"); return; }
-      strlcpy(nextAutomation.relayName[i], name.c_str(), sizeof(nextAutomation.relayName[i]));
-    }
-  }
-  if (doc["switchPins"].is<JsonArray>()) {
-    JsonArrayConst pins = doc["switchPins"].as<JsonArrayConst>();
-    if (pins.size() != 4) { jsonError(request, 400, "Exactly four switch port values are required"); return; }
-    for (uint8_t i = 0; i < 4; ++i) {
-      const int pin = pins[i] | -1;
-      if (pin != -1 && (pin < 32 || pin > 35)) { jsonError(request, 400, "Switch input must be Disabled or PCF8574 P0-P3"); return; }
-      nextAutomation.switchPin[i] = pin < 0 ? 255 : (uint8_t)pin;
-    }
-  }
-  if (doc["switchActiveLow"].is<JsonArray>()) {
-    JsonArrayConst values = doc["switchActiveLow"].as<JsonArrayConst>();
-    if (values.size() != 4) { jsonError(request, 400, "Exactly four switch polarity values are required"); return; }
-    for (uint8_t i = 0; i < 4; ++i) nextAutomation.switchActiveLow[i] = 1; // GND-closing inputs are always Active-Low.
-  }
-  if (doc["switchMode"].is<JsonArray>()) {
-    JsonArrayConst modes = doc["switchMode"].as<JsonArrayConst>();
-    if (modes.size() != 4) { jsonError(request, 400, "Exactly four switch modes are required"); return; }
-    for (uint8_t i = 0; i < 4; ++i) {
-      const int mode = modes[i] | 1;
-      if (mode < 0 || mode > 1) { jsonError(request, 400, "Invalid switch mode"); return; }
-      nextAutomation.switchMode[i] = (uint8_t)mode;
-    }
-  }
-  for (uint8_t i = 0; i < 4; ++i) {
-    for (uint8_t j = i + 1; j < 4; ++j) {
-      if (nextAutomation.switchPin[i] != 255 && nextAutomation.switchPin[i] == nextAutomation.switchPin[j]) {
-        jsonError(request, 400, "A PCF8574 input cannot be assigned to more than one relay"); return;
-      }
-    }
-  }
 
   _cfg->automation() = nextAutomation;
   if (!_cfg->saveAutomation()) {
@@ -368,8 +339,94 @@ void WebManager::handleSettingsSave(AsyncWebServerRequest* request, JsonDocument
     jsonError(request, 500, rollbackOk ? "Could not save device settings; previous settings restored" : "Settings save and rollback failed; inspect device storage before continuing");
     return;
   }
-  sendJson(request, 200, String("{\"message\":\"Settings saved. Restarting to apply network and switch input changes.\"}"));
+  sendJson(request, 200, String("{\"message\":\"Network settings saved. Restarting to apply Wi-Fi changes.\"}"));
   scheduleRestart(1200);
+}
+
+void WebManager::handleRelayConfigSave(AsyncWebServerRequest* request, JsonDocument& doc) {
+  const JsonArrayConst names = doc["relayNames"].as<JsonArrayConst>();
+  const JsonArrayConst polarity = doc["relayActiveLow"].as<JsonArrayConst>();
+  const int switchRelay = doc["switchRelay"] | -1;
+  if (names.size() != 4 || polarity.size() != 4) {
+    jsonError(request, 400, "Exactly four relay names and polarity values are required");
+    return;
+  }
+  if (switchRelay < -1 || switchRelay > 3) {
+    jsonError(request, 400, "Select Disabled or one relay for the single D0/GPIO16 wall switch");
+    return;
+  }
+
+  AutomationConfig previous = _cfg->automation();
+  AutomationConfig next = previous;
+  for (uint8_t i = 0; i < 4; ++i) {
+    const String name = names[i] | "";
+    if (!validText(name, 23, false) || name.length() == 0) {
+      jsonError(request, 400, "Each relay name must be 1 to 23 characters");
+      return;
+    }
+    strlcpy(next.relayName[i], name.c_str(), sizeof(next.relayName[i]));
+    next.relayActiveLow[i] = polarity[i].as<bool>() ? 1 : 0;
+    next.switchPin[i] = 255;
+    next.switchActiveLow[i] = 1;
+    next.switchMode[i] = 1;
+  }
+  if (switchRelay >= 0) {
+    next.switchPin[switchRelay] = 16;
+    // A maintained physical contact owns this relay; remove conflicting
+    // countdowns and weekly rules when the owner assigns the input.
+    next.timers[switchRelay].enabled = 0;
+    next.timers[switchRelay].dueEpoch = 0;
+    next.timers[switchRelay].remainingSec = 0;
+    for (uint8_t i = 0; i < 8; ++i) {
+      if (next.schedules[i].relay == switchRelay) next.schedules[i].enabled = 0;
+    }
+  }
+
+  _cfg->automation() = next;
+  if (!_cfg->saveAutomation()) {
+    _cfg->automation() = previous;
+    jsonError(request, 500, "Could not save relay configuration");
+    return;
+  }
+  // Re-apply each relay with its newly saved active-high/active-low polarity.
+  for (uint8_t i = 0; i < 4; ++i) _relays->set(i, _relays->get(i), false);
+  _automation->reloadSwitchConfig();
+  JsonDocument result;
+  result["message"] = "Relay configuration saved. No restart required.";
+  result["switchRelay"] = switchRelay;
+  String out;
+  serializeJson(result, out);
+  sendJson(request, 200, out);
+}
+
+void WebManager::handleFirebaseGet(AsyncWebServerRequest* request) {
+  JsonDocument doc;
+  _firebase->getPublicStatus(doc);
+  String out;
+  serializeJson(doc, out);
+  sendJson(request, 200, out);
+}
+
+void WebManager::handleFirebaseSave(AsyncWebServerRequest* request, JsonDocument& doc) {
+  const String databaseUrl = doc["databaseUrl"] | "";
+  const String apiKey = doc["apiKey"] | "";
+  const String deviceId = doc["deviceId"] | "";
+  const String email = doc["deviceEmail"] | "";
+  const String password = doc["devicePassword"] | "";
+  String error;
+  if (!_firebase->configure(databaseUrl, apiKey, deviceId, email, password, error)) {
+    jsonError(request, 400, error.c_str());
+    return;
+  }
+  sendJson(request, 200, String("{\"message\":\"Firebase device account verified and securely configured.\"}"));
+}
+
+void WebManager::handleFirebaseDelete(AsyncWebServerRequest* request) {
+  if (!_firebase->clearConfiguration()) {
+    jsonError(request, 500, "Could not clear Firebase settings");
+    return;
+  }
+  sendJson(request, 200, String("{\"message\":\"Firebase remote access has been disabled.\"}"));
 }
 
 void WebManager::handleAutomationGet(AsyncWebServerRequest* request) {
@@ -409,6 +466,10 @@ void WebManager::handleTimer(AsyncWebServerRequest* request, JsonDocument& doc) 
   const int seconds = doc["seconds"] | -1;
   const bool action = doc["action"] | false;
   if (relay < 0 || relay > 3 || seconds < 0 || seconds > 2592000) { jsonError(request, 400, "Invalid relay or timer duration (0 to 30 days)"); return; }
+  if (seconds > 0 && _automation->physicalPriorityRelay((uint8_t)relay)) {
+    jsonError(request, 409, "This relay is controlled by the maintained physical switch; timer is disabled for it");
+    return;
+  }
   const bool ok = seconds == 0 ? _automation->cancelTimer((uint8_t)relay)
     : _automation->setTimer((uint8_t)relay, action, (uint32_t)seconds, _wifi->timeSynced());
   if (!ok) { jsonError(request, 500, "Could not save timer"); return; }
@@ -429,6 +490,10 @@ void WebManager::handleSchedule(AsyncWebServerRequest* request, JsonDocument& do
     if (relay < 0 || relay > 3 || daysMask < 1 || daysMask > 127 || minute < 0 || minute > 1439) {
       jsonError(request, 400, "Invalid schedule. Select relay, days and a valid time"); return;
     }
+    if (_automation->physicalPriorityRelay((uint8_t)relay)) {
+      jsonError(request, 409, "This relay is controlled by the maintained physical switch; schedule is disabled for it");
+      return;
+    }
     ok = _automation->setSchedule((uint8_t)slot, (uint8_t)relay, action, (uint8_t)daysMask, (uint16_t)minute, enabled);
   }
   if (!ok) { jsonError(request, 500, "Could not save schedule"); return; }
@@ -439,6 +504,14 @@ void WebManager::handleRelay(AsyncWebServerRequest* request, JsonDocument& doc) 
   const int index = doc["index"] | -1;
   const bool on = doc["on"] | false;
   if (index < 0 || index >= 4) { jsonError(request, 400, "Invalid relay index"); return; }
+  if (_automation->physicalPriorityRelay((uint8_t)index)) {
+    jsonError(request, 409, "The physical wall switch currently has priority for this relay");
+    return;
+  }
+  if (!_automation->cancelTimer((uint8_t)index)) {
+    jsonError(request, 500, "Could not cancel the active timer before manual control");
+    return;
+  }
   if (!_relays->set((uint8_t)index, on, true)) { jsonError(request, 500, "Could not save relay state"); return; }
   handleState(request);
 }

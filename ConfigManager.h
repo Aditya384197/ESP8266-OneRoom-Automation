@@ -44,6 +44,19 @@ struct ScheduleRule {
   int32_t lastRunDay;      // local calendar day key; prevents duplicate runs
 };
 
+struct FirebaseConfig {
+  uint32_t magic;
+  uint16_t version;
+  uint16_t enabled;
+  char databaseUrl[128];
+  char apiKey[48];
+  char deviceId[40];
+  char deviceEmail[80];
+  char deviceUid[40];
+  char refreshToken[768];
+  uint32_t crc32;
+};
+
 struct AutomationConfig {
   uint32_t magic;
   uint16_t version;
@@ -69,17 +82,23 @@ public:
   bool loadAutomation();
   bool saveAutomation();
   bool factoryReset();
+  bool loadFirebase();
+  bool saveFirebase();
+  bool clearFirebase();
 
   DeviceConfig& config() { return _config; }
   RelayState& state() { return _state; }
   AutomationConfig& automation() { return _automation; }
   const AutomationConfig& automation() const { return _automation; }
+  FirebaseConfig& firebase() { return _firebase; }
+  const FirebaseConfig& firebase() const { return _firebase; }
 
 
 private:
   DeviceConfig _config{};
   RelayState _state{};
   AutomationConfig _automation{};
+  FirebaseConfig _firebase{};
 
   bool loadBinary(const char* path, const char* backup, void* data, size_t size);
   bool saveBinary(const char* path, const char* backup, const void* data, size_t size);
@@ -89,8 +108,11 @@ private:
   bool validateConfig(const DeviceConfig& c) const;
   bool validateState(const RelayState& s) const;
   bool validateAutomation(const AutomationConfig& a) const;
+  bool validateFirebase(const FirebaseConfig& f) const;
   uint32_t crc32(const uint8_t* data, size_t len) const;
   void updateConfigCrc();
   void updateStateCrc();
   void updateAutomationCrc();
+  void updateFirebaseCrc();
+  void defaultFirebase();
 };

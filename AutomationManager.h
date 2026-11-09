@@ -18,6 +18,8 @@ public:
                    uint8_t daysMask, uint16_t minuteOfDay, bool enabled);
   bool removeSchedule(uint8_t slot);
 
+  bool physicalPriorityRelay(uint8_t relay) const;
+  void reloadSwitchConfig();
   const AutomationConfig& config() const;
 
 private:
@@ -32,17 +34,11 @@ private:
   SwitchRuntime _switches[4];
   unsigned long _timerEndMs[4] = {0, 0, 0, 0};
   unsigned long _lastTimerSaveAt = 0;
-  unsigned long _lastExpanderRetryAt = 0;
   unsigned long _lastSwitchScanAt = 0;
-  bool _expanderAvailable = false;
-  bool _needsExpander = false;
-  uint8_t _expanderBits = 0xFF;
 
   void beginSwitches();
-  bool readExpander(uint8_t& bits);
   void scanSwitches();
   void processTimers(bool timeSynced);
   void processSchedules(bool timeSynced);
   static int32_t localDayKey(const struct tm& value);
-  bool readSwitchPressed(uint8_t virtualPin, bool activeLow, uint8_t expanderBits) const;
 };
