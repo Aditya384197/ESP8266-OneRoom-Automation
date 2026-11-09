@@ -1,4 +1,5 @@
-name: ESP8266 Firmware and LittleFS
+
+name: ESP8266 Complete Firmware Build
 
 on:
   push:
@@ -13,132 +14,158 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+
     steps:
-      - name: Checkout source
+      - name: Checkout Complete Source Code
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - name: Install PlatformIO
+      - name: Install Build Tools
         run: |
           python -m pip install --upgrade pip
-          python -m pip install platformio
+          python -m pip install platformio esptool
 
-      - name: Show build configuration
+      - name: Verify Project Configuration
         run: |
           set -euo pipefail
+
+          echo "===== PlatformIO ====="
           pio --version
-          echo "===== PlatformIO configuration ====="
-          cat platformio.ini
-          echo "===== Repository source files ====="
-          find . -maxdepth 3 -type f \
-            ! -path './.git/*' ! -path './.pio/*' | sort
 
-      # Build and copy the firmware immediately. The later buildfs target can
-      # regenerate PlatformIO's build directory, so do not depend on the
-      # firmware.bin still being present after buildfs has run.
-      - name: Build and stage ESP8266 firmware
+          echo "===== Project Configuration ====="
+          cat platformio.ini
+
+          echo "===== Complete Source Files ====="
+          find . -maxdepth 3 -type f \
+            ! -path './.git/*' \
+            ! -path './.pio/*' | sort
+
+      - name: Build Complete ESP8266 Firmware
         run: |
           set -euo pipefail
+
           pio run -e nodemcuv2
 
-          FIRMWARE_PATH=".pio/build/nodemcuv2/firmware.bin"
-          if [ ! -s "$FIRMWARE_PATH" ]; then
-            echo "ERROR: Firmware output was not generated: $FIRMWARE_PATH"
-            echo "===== PlatformIO build directory ====="
-            find .pio/build -maxdepth 3 -type f -printf '%p %s bytes\n' 2>/dev/null | sort || true
+          FIRMWARE=".pio/build/nodemcuv2/firmware.bin"
+
+          if [ ! -s "$FIRMWARE" ]; then
+            echo "ERROR: Firmware build failed!"
             exit 1
           fi
 
           mkdir -p artifacts
-          cp "$FIRMWARE_PATH" artifacts/firmware.bin
-          test -s artifacts/firmware.bin
-          echo "Firmware staged before LittleFS build:"
+          cp "$FIRMWARE" artifacts/firmware.bin
+
+          echo "Firmware build successful:"
           ls -lh artifacts/firmware.bin
 
-      - name: Verify prepared LittleFS source
+      - name: Verify LittleFS Source Files
         run: |
           set -euo pipefail
+
           for file in index.html settings.html app.js style.css; do
             if [ ! -s ".piofs/$file" ]; then
-              echo "ERROR: Missing or empty LittleFS source: .piofs/$file"
+              echo "ERROR: Missing LittleFS file: $file"
               exit 1
             fi
           done
-          echo "===== LittleFS source files ====="
-          find .piofs -maxdepth 1 -type f -printf '%f %s bytes\n' | sort
 
-      - name: Build and stage LittleFS image
+          echo "LittleFS source verification successful."
+
+      - name: Build Complete LittleFS Filesystem
         run: |
           set -euo pipefail
+
           pio run -e nodemcuv2 -t buildfs
 
-          LITTLEFS_PATH=".pio/build/nodemcuv2/littlefs.bin"
-          if [ ! -s "$LITTLEFS_PATH" ]; then
-            echo "ERROR: LittleFS output was not generated: $LITTLEFS_PATH"
-            echo "===== PlatformIO build directory ====="
-            find .pio/build -maxdepth 3 -type f -printf '%p %s bytes\n' 2>/dev/null | sort || true
+          LITTLEFS=".pio/build/nodemcuv2/littlefs.bin"
+
+          if [ ! -s "$LITTLEFS" ]; then
+            echo "ERROR: LittleFS build failed!"
             exit 1
           fi
 
-          cp "$LITTLEFS_PATH" artifacts/littlefs.bin
-          test -s artifacts/littlefs.bin
-          echo "LittleFS image staged:"
+          cp "$LITTLEFS" artifacts/littlefs.bin
+
+          echo "LittleFS build successful:"
           ls -lh artifacts/littlefs.bin
 
-      - name: Prepare and checksum release artifacts
+      - name: Verify Firmware and Filesystem
         run: |
           set -euo pipefail
+
           test -s artifacts/firmware.bin
           test -s artifacts/littlefs.bin
 
+          python -m esptool \
+            --chip esp8266 image_info artifacts/firmware.bin
+
+          echo "Both binary images verified."
+
+      - name: Merge Firmware and LittleFS
+        run: |
+          set -euo pipefail
+
+          python -m esptool \
+            --chip esp8266 merge_bin \
+            --output artifacts/merged.bin \
+            --flash_mode dio \
+            --flash_freq 40m \
+            --flash_size 4MB \
+            0x00000 artifacts/firmware.bin \
+            0x300000 artifacts/littlefs.bin
+
+          if [ ! -s artifacts/merged.bin ]; then
+            echo "ERROR: Merged binary was not generated!"
+            exit 1
+          fi
+
+          echo "===== FINAL MERGED FIRMWARE ====="
+          ls -lh artifacts/merged.bin
+
+      - name: Generate Build Information and Checksums
+        run: |
+          set -euo pipefail
+
           {
-            echo "Firmware version: 1.7.2"
-            echo "Board: NodeMCU v2 (ESP8266)"
-            echo "PlatformIO environment: nodemcuv2"
-            echo "Firmware: firmware.bin"
-            echo "Filesystem: littlefs.bin"
-            echo "Flash layout: 4 MB flash / 1 MB LittleFS"
+            echo "Firmware Version: 1.7.2"
+            echo "Board: NodeMCU v2"
+            echo "Chip: ESP8266"
+            echo "Flash Size: 4MB"
+            echo "Filesystem: LittleFS"
+            echo "Firmware Offset: 0x00000"
+            echo "LittleFS Offset: 0x300000"
+            echo "Final Output: merged.bin"
           } > artifacts/BUILD-INFO.txt
 
-          (cd artifacts && sha256sum firmware.bin littlefs.bin > SHA256SUMS)
+          cd artifacts
 
-          zip -j artifacts/ESP8266-OneRoom-Automation-1.7.2.zip \
-            artifacts/firmware.bin \
-            artifacts/littlefs.bin \
-            artifacts/BUILD-INFO.txt \
-            artifacts/SHA256SUMS
+          sha256sum firmware.bin littlefs.bin merged.bin > SHA256SUMS
 
-          echo "===== Final artifacts ====="
-          ls -lh artifacts/
-          unzip -l artifacts/ESP8266-OneRoom-Automation-1.7.2.zip
+          zip ESP8266-OneRoom-Automation-1.7.2.zip \
+            firmware.bin \
+            littlefs.bin \
+            merged.bin \
+            BUILD-INFO.txt \
+            SHA256SUMS
 
-      - name: Upload firmware image
+          echo "===== FINAL BUILD FILES ====="
+          ls -lh
+
+      - name: Upload Complete Build Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ESP8266-firmware
-          path: artifacts/firmware.bin
-          if-no-files-found: error
-          retention-days: 30
-
-      - name: Upload LittleFS image
-        uses: actions/upload-artifact@v4
-        with:
-          name: ESP8266-littlefs
-          path: artifacts/littlefs.bin
-          if-no-files-found: error
-          retention-days: 30
-
-      - name: Upload complete release bundle
-        uses: actions/upload-artifact@v4
-        with:
-          name: ESP8266-OneRoom-Automation-1.7.2
+          name: ESP8266-OneRoom-Automation-v1.7.2
           path: |
-            artifacts/ESP8266-OneRoom-Automation-1.7.2.zip
+            artifacts/merged.bin
+            artifacts/firmware.bin
+            artifacts/littlefs.bin
             artifacts/BUILD-INFO.txt
             artifacts/SHA256SUMS
+            artifacts/ESP8266-OneRoom-Automation-1.7.2.zip
           if-no-files-found: error
           retention-days: 30
