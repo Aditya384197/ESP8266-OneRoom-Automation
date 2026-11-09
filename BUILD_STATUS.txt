@@ -1,0 +1,22 @@
+ESP8266 OneRoom Automation - assembled source package
+Version: 1.6.0
+Target: NodeMCU v2 / ESP8266 / PlatformIO
+
+Package assembly:
+- Original project source merged with the supplied v1.4.0, v1.5.0 and v1.6.0 patch packages in order.
+- GitHub Actions workflow included: .github/workflows/build.yml
+- Expected outputs after a successful Actions run: firmware.bin and littlefs.bin
+- Flash addresses for the configured 4 MB layout: firmware.bin at 0x00000; littlefs.bin at 0x300000.
+
+Important scope notes:
+- This is the assembled v1.6.0 baseline for the user's build/test, not the unfinished Firebase-enabled firmware.
+- Firebase Authentication / Realtime Database integration is NOT included yet.
+- The current v1.6.0 switch implementation uses a PCF8574 expander for four inputs. It does NOT yet implement the requested two direct ESP8266 GPIO switches.
+- Factory reset currently uses NodeMCU D7 / GPIO13.
+- The timer/schedule versus maintained physical-switch priority issue still needs a code fix and test.
+- No local PlatformIO compile was run in this environment. Use the included GitHub Actions workflow to compile and inspect its result before flashing.
+
+Safety:
+- Do not flash until GitHub Actions completes successfully and both binary artifacts are present.
+- Use firmware.bin and littlefs.bin from the SAME workflow run.
+- LittleFS flashing may erase saved settings and passwords; back up settings where possible.
