@@ -1,7 +1,7 @@
 #include "RelayManager.h"
 
 const uint8_t RelayManager::PINS[4] = {5, 4, 14, 12}; // D1,D2,D5,D6
-static constexpr uint8_t PHYSICAL_SWITCH_GPIO = 16; // NodeMCU D0
+static constexpr uint8_t PHYSICAL_SWITCH_GPIO = 13; // NodeMCU D7
 
 void RelayManager::begin(ConfigManager& cfg) {
   _cfg = &cfg;
@@ -25,7 +25,7 @@ void RelayManager::writePin(uint8_t index, bool on) {
 void RelayManager::restore() {
   for (uint8_t i = 0; i < 4; i++) {
     // Do not briefly restore a stale saved state on a relay owned by the
-    // maintained wall switch. AutomationManager samples D0 immediately after
+    // maintained wall switch. AutomationManager samples D7 immediately after
     // this call and applies the physical contact's state instead.
     if (_cfg->automation().switchPin[i] == PHYSICAL_SWITCH_GPIO) {
       yield();

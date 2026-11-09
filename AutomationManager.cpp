@@ -5,7 +5,7 @@ static constexpr unsigned long SWITCH_DEBOUNCE_MS = 45UL;
 static constexpr unsigned long SWITCH_SAMPLE_INTERVAL_MS = 10UL;
 static constexpr unsigned long TIMER_SAVE_INTERVAL_MS = 300000UL; // 5-minute checkpoint to limit flash wear
 static constexpr uint32_t MAX_TIMER_SECONDS = 2592000UL;
-static constexpr uint8_t PHYSICAL_SWITCH_GPIO = 16; // NodeMCU D0; external pull-up required
+static constexpr uint8_t PHYSICAL_SWITCH_GPIO = 13; // NodeMCU D7; factory-reset GPIO repurposed
 
 void AutomationManager::begin(ConfigManager& cfg, RelayManager& relays) {
   _cfg = &cfg;
@@ -31,13 +31,13 @@ const AutomationConfig& AutomationManager::config() const {
 void AutomationManager::beginSwitches() {
   if (!_cfg || !_relays) return;
 
-  // GPIO16 / D0 has no usable internal pull-up on ESP8266. The wiring must
-  // provide an external 10k pull-up to 3.3V and a dry contact to GND.
+  // D7 / GPIO13 supports INPUT_PULLUP. Connect a dry-contact switch
+  // between D7/GPIO13 and GND; no external pull-up is required.
   bool configured = false;
   for (uint8_t i = 0; i < 4; ++i) {
     if (_cfg->automation().switchPin[i] != PHYSICAL_SWITCH_GPIO) continue;
     configured = true;
-    pinMode(PHYSICAL_SWITCH_GPIO, INPUT);
+    pinMode(PHYSICAL_SWITCH_GPIO, INPUT_PULLUP);
     const bool pressed = digitalRead(PHYSICAL_SWITCH_GPIO) == LOW;
     _switches[i].rawPressed = pressed;
     _switches[i].stablePressed = pressed;
@@ -45,7 +45,7 @@ void AutomationManager::beginSwitches() {
     // A maintained switch owns this relay from the first stable sample.
     _relays->set(i, pressed, false);
   }
-  if (configured) Serial.println(F("Physical switch ready on D0/GPIO16 (external pull-up required)."));
+  if (configured) Serial.println(F("Physical switch ready on D7/GPIO13 (internal pull-up enabled)."));
 }
 
 void AutomationManager::scanSwitches() {

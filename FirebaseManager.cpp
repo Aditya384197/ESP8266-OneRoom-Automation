@@ -356,6 +356,7 @@ bool FirebaseManager::pollAndPublish(String& error) {
   JsonDocument patch;
   JsonObject ackOut = patch["commandAck"].to<JsonObject>();
   bool ackChanged = false;
+  bool factoryResetRequested = false;
   JsonVariant commands = remote["commands"];
   JsonVariant ack = remote["commandAck"];
   for (uint8_t i = 0; i < 4; ++i) {
@@ -384,6 +385,21 @@ bool FirebaseManager::pollAndPublish(String& error) {
     }
     ackOut[key] = commandId;
     ackChanged = true;
+  }
+
+  // A factory reset is deliberately separate from relay commands and is
+  // authorized only by the immutable Admin UID in Realtime Database Rules.
+  JsonVariantConst resetCommand = commands["factoryReset"];
+  if (resetCommand.is<JsonObject>()) {
+    const String resetId = resetCommand["id"] | "";
+    const String confirm = resetCommand["confirm"] | "";
+    const String resetAck = ack["factoryReset"] | "";
+    if (resetId.length() > 0 && resetId.length() <= 64 &&
+        confirm == "RESET" && resetId != resetAck) {
+      ackOut["factoryReset"] = resetId;
+      ackChanged = true;
+      factoryResetRequested = true;
+    }
   }
   if (!ackChanged) patch.remove("commandAck");
 
@@ -418,6 +434,19 @@ bool FirebaseManager::pollAndPublish(String& error) {
     if (!deserializeJson(err, response)) error = err["error"] | "Realtime Database rejected the state update.";
     else error = String("Realtime Database update failed with HTTP ") + code;
     return false;
+  }
+
+  if (factoryResetRequested) {
+    // The acknowledgement is committed before credentials are erased. The
+    // app can then observe the reset request was accepted and the device
+    // will disappear from Firebase after reboot until provisioned again.
+    if (!_cfg->factoryReset()) {
+      error = "Factory reset command was acknowledged, but local configuration could not be erased.";
+      return false;
+    }
+    _relays->restore(); // Re-apply OFF using the factory-default relay polarity.
+    delay(250);
+    ESP.restart();
   }
   return true;
 }

@@ -1,18 +1,22 @@
-ESP8266 OneRoom Automation v1.7.0
+ESP8266 OneRoom Automation v1.7.1
 
-Source: assembled from the latest user-supplied GitHub source archive (commit fa1c126b43ec7c045748f3691be74cf94c1a78dd).
+Source: based on the latest user-supplied GitHub source archive (commit fa1c126b43ec7c045748f3691be74cf94c1a78dd), with requested GPIO and reset changes.
 Board: NodeMCU v2 / ESP8266, 4 MB flash, 1 MB LittleFS layout.
 
 Implemented in source:
 - Fixed relay outputs: D1/GPIO5, D2/GPIO4, D5/GPIO14, D6/GPIO12.
-- One maintained physical switch on D0/GPIO16; external 10 kOhm pull-up to 3.3V required.
-- Factory-reset button remains D7/GPIO13.
+- One maintained physical switch on D7/GPIO13; internal INPUT_PULLUP; dry-contact switch to GND.
+- Physical factory-reset GPIO and button polling have been removed. Local dashboard reset and Admin-only Firebase reset command are supported.
 - Physical switch priority enforced against manual API, timer, weekly schedule and Firebase commands.
 - A switch-owned relay skips stale saved-state restoration at boot and is initialized from the physical contact.
 - Relay names/polarity/switch assignment use a dedicated no-reboot save endpoint.
 - Firebase device-only Authentication sign-in and refresh-token flow.
 - Verified TLS REST calls, RTDB desired-state commands, acknowledgements and actual-state heartbeat.
 - Fixed Admin UID Realtime Database rules template and Firebase setup guide included.
+
+Additional v1.7.1 changes:
+- Automation storage migrates v4 to v5 and remaps a prior D0/GPIO16 switch assignment to D7/GPIO13 while preserving relay names, polarity, timers and schedules.
+- The dashboard reset API and Firebase Admin-only reset command erase configuration, then re-apply relay OFF levels using factory-default polarity before restart.
 
 Validation performed in this environment:
 - Source archive extracted and required source/assets inspected.
@@ -25,7 +29,7 @@ Not verified here:
 - Android app (will be a separate next project after firmware build/hardware confirmation).
 
 Important setup notes:
-- Select one relay for D0 switch only after adding the external pull-up.
+- Select one relay for D7 switch and connect a dry-contact switch to GND; internal INPUT_PULLUP is enabled.
 - Set the fixed Admin UID in firebase.database.rules.json and publish the rules.
 - Create a separate device Authentication account and deviceAccounts/{uid} record before saving Firebase settings on the ESP8266.
 - The ESP8266 refresh token is stored in unencrypted LittleFS. Do not expose its local HTTP server to the public internet.

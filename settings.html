@@ -55,9 +55,9 @@
         </div>
         <div class="panel-card">
           <h2>One direct physical wall switch</h2>
-          <p class="help">The single switch uses NodeMCU D0 / ESP8266 GPIO16. Select which relay it controls. This is a maintained switch: closed to GND = ON; open = OFF. The physical switch has priority over dashboard, timer, weekly schedule and Firebase commands for that relay.</p>
+          <p class="help">The single switch uses NodeMCU D7 / ESP8266 GPIO13. Select which relay it controls. This is a maintained switch: closed to GND = ON; open = OFF. The physical switch has priority over dashboard, timer, weekly schedule and Firebase commands for that relay.</p>
           <label class="field">Relay controlled by physical switch<select id="switchRelay"><option value="-1">Disabled</option><option value="0">Relay 1 · D1 · GPIO5</option><option value="1">Relay 2 · D2 · GPIO4</option><option value="2">Relay 3 · D5 · GPIO14</option><option value="3">Relay 4 · D6 · GPIO12</option></select></label>
-          <div class="warning-note"><strong>Required wiring:</strong> GPIO16/D0 has no usable internal pull-up. Add an external 10kΩ resistor from D0/GPIO16 to 3.3V. Connect the dry-contact switch between D0/GPIO16 and GND. Use 3.3V logic only. Never connect mains voltage to this pin. Keep the existing factory-reset button on D7/GPIO13; do not bridge D7 to the physical switch.</div>
+          <div class="warning-note"><strong>Required wiring:</strong> D7/GPIO13 is now reserved for the physical switch; the old physical factory-reset input has been removed. Connect a dry-contact switch between D7/GPIO13 and GND. Firmware uses INPUT_PULLUP, so no external pull-up resistor is required. Use only a dry contact; never connect mains voltage or an external voltage to this GPIO. Factory reset is available from this dashboard and the future app.</div>
         </div>
         <div class="settings-button-row"><button class="action-button" type="submit">Save relay configuration</button></div>
         <p id="relayMessage" class="message" role="status"></p>

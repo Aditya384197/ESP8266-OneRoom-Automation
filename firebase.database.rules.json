@@ -8,12 +8,24 @@
         ".read": "auth != null && (auth.uid === 'REPLACE_WITH_ADMIN_UID' || auth.uid === $uid)",
         ".write": "auth != null && (auth.uid === 'REPLACE_WITH_ADMIN_UID' || (auth.uid === $uid && !data.exists() && !root.child('deviceAccounts').child(auth.uid).exists() && newData.child('role').val() === 'user' && newData.child('status').val() === 'pending'))",
         ".validate": "newData.hasChildren(['role', 'status', 'createdAt'])",
-        "role": { ".validate": "newData.val() === 'user'" },
-        "status": { ".validate": "newData.val() === 'pending' || newData.val() === 'approved' || newData.val() === 'rejected' || newData.val() === 'revoked'" },
-        "createdAt": { ".validate": "newData.isNumber()" },
-        "displayName": { ".validate": "newData.isString() && newData.val().length <= 50" },
-        "email": { ".validate": "newData.isString() && newData.val().length <= 120" },
-        "$other": { ".validate": false }
+        "role": {
+          ".validate": "newData.val() === 'user'"
+        },
+        "status": {
+          ".validate": "newData.val() === 'pending' || newData.val() === 'approved' || newData.val() === 'rejected' || newData.val() === 'revoked'"
+        },
+        "createdAt": {
+          ".validate": "newData.isNumber()"
+        },
+        "displayName": {
+          ".validate": "newData.isString() && newData.val().length <= 50"
+        },
+        "email": {
+          ".validate": "newData.isString() && newData.val().length <= 120"
+        },
+        "$other": {
+          ".validate": false
+        }
       }
     },
     "userDevices": {
@@ -21,7 +33,9 @@
       "$uid": {
         ".read": "auth != null && (auth.uid === 'REPLACE_WITH_ADMIN_UID' || auth.uid === $uid)",
         ".write": "auth != null && auth.uid === 'REPLACE_WITH_ADMIN_UID'",
-        "$deviceId": { ".validate": "newData.isBoolean() && newData.val() === true" }
+        "$deviceId": {
+          ".validate": "newData.isBoolean() && newData.val() === true"
+        }
       }
     },
     "deviceAccounts": {
@@ -30,40 +44,68 @@
         ".read": "auth != null && (auth.uid === 'REPLACE_WITH_ADMIN_UID' || auth.uid === $uid)",
         ".write": "auth != null && auth.uid === 'REPLACE_WITH_ADMIN_UID'",
         ".validate": "newData.hasChildren(['deviceId', 'enabled'])",
-        "deviceId": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 39" },
-        "enabled": { ".validate": "newData.isBoolean()" },
-        "$other": { ".validate": false }
+        "deviceId": {
+          ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 39"
+        },
+        "enabled": {
+          ".validate": "newData.isBoolean()"
+        },
+        "$other": {
+          ".validate": false
+        }
       }
     },
     "devices": {
       "$deviceId": {
         ".read": "auth != null && (auth.uid === 'REPLACE_WITH_ADMIN_UID' || (root.child('deviceAccounts').child(auth.uid).child('enabled').val() === true && root.child('deviceAccounts').child(auth.uid).child('deviceId').val() === $deviceId) || (root.child('users').child(auth.uid).child('status').val() === 'approved' && root.child('userDevices').child(auth.uid).child($deviceId).val() === true && !root.child('deviceAccounts').child(auth.uid).exists()))",
         "commands": {
-          "$relay": {
-            ".write": "auth != null && ($relay === 'relay1' || $relay === 'relay2' || $relay === 'relay3' || $relay === 'relay4') && (auth.uid === 'REPLACE_WITH_ADMIN_UID' || (root.child('users').child(auth.uid).child('status').val() === 'approved' && root.child('userDevices').child(auth.uid).child($deviceId).val() === true && !root.child('deviceAccounts').child(auth.uid).exists()))",
-            ".validate": "newData.hasChildren(['id', 'value']) && newData.numChildren() === 2 && newData.child('id').isString() && newData.child('id').val().length > 0 && newData.child('id').val().length <= 64 && newData.child('value').isBoolean()"
+          "$command": {
+            ".write": "auth != null && (($command === 'factoryReset' && auth.uid === 'REPLACE_WITH_ADMIN_UID') || (($command === 'relay1' || $command === 'relay2' || $command === 'relay3' || $command === 'relay4') && (auth.uid === 'REPLACE_WITH_ADMIN_UID' || (root.child('users').child(auth.uid).child('status').val() === 'approved' && root.child('userDevices').child(auth.uid).child($deviceId).val() === true && !root.child('deviceAccounts').child(auth.uid).exists()))))",
+            ".validate": "($command === 'factoryReset' && newData.hasChildren(['id', 'confirm']) && newData.numChildren() === 2 && newData.child('id').isString() && newData.child('id').val().length > 0 && newData.child('id').val().length <= 64 && newData.child('confirm').val() === 'RESET') || (($command === 'relay1' || $command === 'relay2' || $command === 'relay3' || $command === 'relay4') && newData.hasChildren(['id', 'value']) && newData.numChildren() === 2 && newData.child('id').isString() && newData.child('id').val().length > 0 && newData.child('id').val().length <= 64 && newData.child('value').isBoolean())"
           }
         },
         "commandAck": {
           "$relay": {
-            ".write": "auth != null && ($relay === 'relay1' || $relay === 'relay2' || $relay === 'relay3' || $relay === 'relay4') && (auth.uid === 'REPLACE_WITH_ADMIN_UID' || (root.child('deviceAccounts').child(auth.uid).child('enabled').val() === true && root.child('deviceAccounts').child(auth.uid).child('deviceId').val() === $deviceId))",
+            ".write": "auth != null && ($relay === 'factoryReset' || $relay === 'relay1' || $relay === 'relay2' || $relay === 'relay3' || $relay === 'relay4') && (auth.uid === 'REPLACE_WITH_ADMIN_UID' || (root.child('deviceAccounts').child(auth.uid).child('enabled').val() === true && root.child('deviceAccounts').child(auth.uid).child('deviceId').val() === $deviceId))",
             ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 64"
           }
         },
         "state": {
           ".write": "auth != null && (auth.uid === 'REPLACE_WITH_ADMIN_UID' || (root.child('deviceAccounts').child(auth.uid).child('enabled').val() === true && root.child('deviceAccounts').child(auth.uid).child('deviceId').val() === $deviceId))",
           ".validate": "newData.hasChildren(['relay1', 'relay2', 'relay3', 'relay4', 'physicalSwitchRelay', 'online', 'lastSeen', 'uptimeSec', 'rssi', 'freeHeap']) && newData.numChildren() === 10",
-          "relay1": { ".validate": "newData.isBoolean()" },
-          "relay2": { ".validate": "newData.isBoolean()" },
-          "relay3": { ".validate": "newData.isBoolean()" },
-          "relay4": { ".validate": "newData.isBoolean()" },
-          "physicalSwitchRelay": { ".validate": "newData.isNumber() && newData.val() >= -1 && newData.val() <= 3" },
-          "online": { ".validate": "newData.isBoolean()" },
-          "lastSeen": { ".validate": "newData.isNumber()" },
-          "uptimeSec": { ".validate": "newData.isNumber()" },
-          "rssi": { ".validate": "newData.isNumber()" },
-          "freeHeap": { ".validate": "newData.isNumber()" },
-          "$other": { ".validate": false }
+          "relay1": {
+            ".validate": "newData.isBoolean()"
+          },
+          "relay2": {
+            ".validate": "newData.isBoolean()"
+          },
+          "relay3": {
+            ".validate": "newData.isBoolean()"
+          },
+          "relay4": {
+            ".validate": "newData.isBoolean()"
+          },
+          "physicalSwitchRelay": {
+            ".validate": "newData.isNumber() && newData.val() >= -1 && newData.val() <= 3"
+          },
+          "online": {
+            ".validate": "newData.isBoolean()"
+          },
+          "lastSeen": {
+            ".validate": "newData.isNumber()"
+          },
+          "uptimeSec": {
+            ".validate": "newData.isNumber()"
+          },
+          "rssi": {
+            ".validate": "newData.isNumber()"
+          },
+          "freeHeap": {
+            ".validate": "newData.isNumber()"
+          },
+          "$other": {
+            ".validate": false
+          }
         }
       }
     }

@@ -1,10 +1,10 @@
-# Upgrade notes — v1.7.0
+# Upgrade notes — v1.7.1
 
 This ZIP is a complete source tree based on the latest source archive supplied for this task, not a patch-only ZIP. It includes the PlatformIO project and GitHub Actions workflow.
 
 ## Main changes
 
-1. **One direct physical switch:** select one relay to be controlled by NodeMCU D0 / ESP8266 GPIO16. D7/GPIO13 remains reserved for the factory-reset button. GPIO16 requires an external 10 kΩ pull-up to 3.3V and a dry-contact switch to GND. Closed = ON, open = OFF.
+1. **One direct physical switch:** select one relay to be controlled by NodeMCU D7 / ESP8266 GPIO13. The physical factory-reset input has been removed. Firmware enables the internal INPUT_PULLUP; connect a dry-contact switch from D7/GPIO13 to GND. Closed = ON, open = OFF.
 2. **Priority:** the selected relay is governed by the maintained switch. Manual/API, timer, schedule and Firebase commands cannot alter it. When selected, its countdown and weekly schedules are disabled. The other three relays keep normal behavior.
 3. **Relay settings:** relay names, output polarity and switch assignment save through `POST /api/relay-config`; this does not restart the board. Output polarity changes are reapplied immediately.
 4. **Firebase device link:** added a separate Firebase device account, Authentication sign-in and refresh, verified HTTPS to Firebase endpoints, Realtime Database command polling, command acknowledgements and actual state publication.
@@ -14,10 +14,9 @@ This ZIP is a complete source tree based on the latest source archive supplied f
 
 ## Before enabling the GPIO switch
 
-- Fit the external 10 kΩ pull-up from D0/GPIO16 to 3.3V.
-- Connect the switch contact between D0/GPIO16 and GND.
-- Never place mains voltage on GPIO16.
-- Keep factory reset on D7/GPIO13.
+- Connect the dry-contact switch between D7/GPIO13 and GND; internal INPUT_PULLUP is enabled.
+- Never place mains voltage on GPIO13.
+- Factory reset is available in the local dashboard and as an Admin-only Firebase command for the future app.
 
 ## Before enabling Firebase
 

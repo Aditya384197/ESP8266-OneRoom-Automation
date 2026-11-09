@@ -11,9 +11,6 @@
 #include "AutomationManager.h"
 #include "FirebaseManager.h"
 
-static constexpr uint8_t FACTORY_RESET_PIN = 13; // NodeMCU D7
-static constexpr unsigned long FACTORY_HOLD_MS = 10000UL;
-
 ConfigManager configManager;
 RelayManager relayManager;
 WiFiController wifiController;
@@ -21,8 +18,6 @@ AutomationManager automationManager;
 FirebaseManager firebaseManager;
 WebManager webManager;
 
-static unsigned long factoryPressedAt = 0;
-static bool factoryResetDone = false;
 static unsigned long lastDiag = 0;
 
 static void setupOTA() {
@@ -47,26 +42,6 @@ static void setupOTA() {
   ArduinoOTA.begin();
 }
 
-static void checkFactoryButton() {
-  const bool pressed = digitalRead(FACTORY_RESET_PIN) == LOW;
-  if (!pressed) {
-    factoryPressedAt = 0;
-    factoryResetDone = false;
-    return;
-  }
-  if (factoryPressedAt == 0) factoryPressedAt = millis();
-  if (!factoryResetDone && (unsigned long)(millis() - factoryPressedAt) >= FACTORY_HOLD_MS) {
-    factoryResetDone = true;
-    Serial.println(F("Factory reset button held: resetting configuration"));
-    relayManager.allOff();
-    if (configManager.factoryReset()) {
-      delay(250);
-      ESP.restart();
-    }
-    factoryResetDone = false;
-  }
-}
-
 void setup() {
   Serial.begin(115200);
   delay(20);
@@ -76,7 +51,6 @@ void setup() {
   Serial.println(F("ESP8266 smart room controller"));
   Serial.println(F("========================================"));
 
-  pinMode(FACTORY_RESET_PIN, INPUT_PULLUP);
 
   // Mount exactly once. Formatting is only a recovery path after mount failure.
   if (!configManager.begin()) {
@@ -114,7 +88,6 @@ void loop() {
   webManager.loop();
   automationManager.loop(wifiController.timeSynced());
   firebaseManager.loop();
-  checkFactoryButton();
 
   const unsigned long now = millis();
   if ((unsigned long)(now - lastDiag) >= 60000UL) {

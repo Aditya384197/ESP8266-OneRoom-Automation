@@ -258,7 +258,7 @@ void WebManager::handleSettingsGet(AsyncWebServerRequest* request) {
   for (uint8_t i = 0; i < 4; ++i) {
     names.add(a.relayName[i]);
     switchPins.add(a.switchPin[i] == 255 ? -1 : a.switchPin[i]);
-    if (a.switchPin[i] == 16) switchRelay = i;
+    if (a.switchPin[i] == 13) switchRelay = i;
     switchActiveLow.add(a.switchActiveLow[i] != 0);
     switchMode.add(a.switchMode[i]);
     relayActiveLow.add(a.relayActiveLow[i] != 0);
@@ -352,7 +352,7 @@ void WebManager::handleRelayConfigSave(AsyncWebServerRequest* request, JsonDocum
     return;
   }
   if (switchRelay < -1 || switchRelay > 3) {
-    jsonError(request, 400, "Select Disabled or one relay for the single D0/GPIO16 wall switch");
+    jsonError(request, 400, "Select Disabled or one relay for the single D7/GPIO13 wall switch");
     return;
   }
 
@@ -371,7 +371,7 @@ void WebManager::handleRelayConfigSave(AsyncWebServerRequest* request, JsonDocum
     next.switchMode[i] = 1;
   }
   if (switchRelay >= 0) {
-    next.switchPin[switchRelay] = 16;
+    next.switchPin[switchRelay] = 13;
     // A maintained physical contact owns this relay; remove conflicting
     // countdowns and weekly rules when the owner assigns the input.
     next.timers[switchRelay].enabled = 0;
@@ -601,6 +601,7 @@ void WebManager::handleFactoryReset(AsyncWebServerRequest* request) {
     jsonError(request, 400, "Factory reset confirmation required"); return;
   }
   if (!_cfg->factoryReset()) { jsonError(request, 500, "Factory reset failed"); return; }
+  _relays->restore();
   sendJson(request, 200, String("{\"message\":\"Factory reset complete. Restarting.\"}"));
   scheduleRestart(1200);
 }

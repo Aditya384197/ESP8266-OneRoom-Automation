@@ -5,7 +5,7 @@ static constexpr uint32_t CONFIG_MAGIC = 0x4F524143UL; // ORAC
 static constexpr uint32_t STATE_MAGIC  = 0x4F524153UL; // ORAS
 static constexpr uint32_t AUTOMATION_MAGIC = 0x4F524141UL; // ORAA
 static constexpr uint16_t FORMAT_VERSION = 1;
-static constexpr uint16_t AUTOMATION_VERSION = 4;
+static constexpr uint16_t AUTOMATION_VERSION = 5;
 static constexpr uint32_t FIREBASE_MAGIC = 0x4F524146UL; // ORAF
 static constexpr uint16_t FIREBASE_VERSION = 1;
 
@@ -48,8 +48,8 @@ void ConfigManager::defaultAutomation() {
   _automation.magic = AUTOMATION_MAGIC;
   _automation.version = AUTOMATION_VERSION;
 
-  // One direct maintained switch may be assigned to GPIO16 / NodeMCU D0.
-  // Disabled by default until the external pull-up and switch are wired.
+  // One direct maintained switch may be assigned to GPIO13 / NodeMCU D7.
+  // Disabled by default until the switch is wired.
   const uint8_t pins[4] = {255, 255, 255, 255};
   const uint8_t activeLow[4] = {1, 1, 1, 1};
   const char* names[4] = {"Ceiling Fan", "Charging Socket", "LED 1", "LED 2"};
@@ -108,9 +108,8 @@ bool ConfigManager::loadAutomation() {
     ScheduleRule schedules[8];
     uint32_t crc32;
   };
-  // v2/v3 are retained for safe on-device migration. The v4 firmware no
-  // longer supports PCF8574 virtual pins; all old expander assignments are
-  // intentionally disabled until the owner wires and selects GPIO16/D0.
+  // Legacy v1-v4 records are migrated safely. Version 4 used D0/GPIO16;
+  // that prior switch assignment is remapped to D7/GPIO13 in v5.
   struct LegacyAutomationConfigV2 {
     uint32_t magic;
     uint16_t version;
@@ -139,6 +138,21 @@ bool ConfigManager::loadAutomation() {
     }
   };
 
+  struct LegacyAutomationConfigV4 {
+    uint32_t magic;
+    uint16_t version;
+    uint16_t reserved;
+    uint8_t switchPin[4];
+    uint8_t switchActiveLow[4];
+    uint8_t switchMode[4];
+    char relayName[4][24];
+    char logoText[256];
+    uint8_t relayActiveLow[4];
+    RelayTimerConfig timers[4];
+    ScheduleRule schedules[8];
+    uint32_t crc32;
+  };
+
   struct LegacyAutomationConfigV3 {
     uint32_t magic;
     uint16_t version;
@@ -152,6 +166,42 @@ bool ConfigManager::loadAutomation() {
     RelayTimerConfig timers[4];
     ScheduleRule schedules[8];
     uint32_t crc32;
+  };
+
+  auto migrateV4 = [&](const char* path) -> bool {
+    File f = LittleFS.open(path, "r");
+    if (!f || (size_t)f.size() != sizeof(LegacyAutomationConfigV4)) {
+      if (f) f.close();
+      return false;
+    }
+    LegacyAutomationConfigV4 old{};
+    const size_t n = f.read((uint8_t*)&old, sizeof(old));
+    f.close();
+    if (n != sizeof(old) || old.magic != AUTOMATION_MAGIC || old.version != 4) return false;
+    const uint32_t stored = old.crc32;
+    old.crc32 = 0;
+    if (!validLegacyCrc(&old, sizeof(old), stored)) return false;
+    defaultAutomation();
+    memcpy(_automation.relayName, old.relayName, sizeof(old.relayName));
+    strlcpy(_automation.logoText, old.logoText, sizeof(_automation.logoText));
+    memcpy(_automation.relayActiveLow, old.relayActiveLow, sizeof(old.relayActiveLow));
+    memcpy(_automation.timers, old.timers, sizeof(old.timers));
+    memcpy(_automation.schedules, old.schedules, sizeof(old.schedules));
+    for (uint8_t i = 0; i < 4; ++i) {
+      // Previous firmware used D0/GPIO16. Remap that one assignment to D7/GPIO13.
+      _automation.switchPin[i] = old.switchPin[i] == 16 ? 13 : 255;
+      _automation.switchActiveLow[i] = 1;
+      _automation.switchMode[i] = 1;
+      if (_automation.switchPin[i] == 13) {
+        _automation.timers[i].enabled = 0;
+        _automation.timers[i].dueEpoch = 0;
+        _automation.timers[i].remainingSec = 0;
+        for (uint8_t j = 0; j < 8; ++j)
+          if (_automation.schedules[j].relay == i) _automation.schedules[j].enabled = 0;
+      }
+    }
+    updateAutomationCrc();
+    return saveAutomation();
   };
 
   auto migrateV3 = [&](const char* path) -> bool {
@@ -227,6 +277,7 @@ bool ConfigManager::loadAutomation() {
   };
 
   if (loadBinary("/automation.bin", "/automation.bak", &_automation, sizeof(_automation))) return true;
+  if (migrateV4("/automation.bin") || migrateV4("/automation.bak")) return true;
   if (migrateV3("/automation.bin") || migrateV3("/automation.bak")) return true;
   if (migrateV2("/automation.bin") || migrateV2("/automation.bak")) return true;
   if (migrateV1("/automation.bin") || migrateV1("/automation.bak")) return true;
@@ -363,7 +414,7 @@ bool ConfigManager::validateAutomation(const AutomationConfig& a) const {
   if (logoLen == 0 || logoLen >= sizeof(a.logoText)) return false;
   for (uint8_t i = 0; i < 4; ++i) {
     const uint8_t pin = a.switchPin[i];
-    if (pin != 255 && pin != 16) return false;
+    if (pin != 255 && pin != 13) return false;
     if (a.switchActiveLow[i] > 1 || a.switchMode[i] > 1 || a.relayActiveLow[i] > 1) return false;
     const size_t nameLen = strnlen(a.relayName[i], sizeof(a.relayName[i]));
     if (nameLen == 0 || nameLen >= sizeof(a.relayName[i])) return false;

@@ -1,4 +1,4 @@
-# Firebase setup — ESP8266 OneRoom Automation v1.7.0
+# Firebase setup — ESP8266 OneRoom Automation v1.7.1
 
 This firmware uses Firebase Authentication (Email/Password) for a dedicated ESP8266 device account and Firebase Realtime Database (REST API) for remote commands and actual-state reporting. The ESP8266 does not create, approve, reject or revoke people. Those administrator functions are reserved for the later Android app and are enforced by the database rules.
 
@@ -85,3 +85,8 @@ The fixed Admin UID in the rules is the only Admin identity. The ESP8266 has no 
 - The firmware polls approximately every 6 seconds when connected and backs off after failures. A command is an idempotent ON/OFF state, not a toggle.
 - Google Trust Services root certificates are embedded in `FirebaseCerts.h`. Certificate authorities and server chains can change; review and refresh the trust bundle periodically before its certificates expire.
 
+
+
+### Admin remote factory reset (future Android app)
+
+The future app can issue a remote factory reset only when signed in with the single Admin UID configured in the database rules. Write this object to `devices/{deviceId}/commands/factoryReset`: `{"id":"unique-reset-command-id","confirm":"RESET"}`. The firmware acknowledges the command at `commandAck/factoryReset`, switches all relays off, clears Wi-Fi, relay, timer, schedule and Firebase settings, then restarts. After reset the device must be provisioned again locally. Approved non-admin users cannot issue this command. The local dashboard continues to use `POST /api/factory-reset` with the explicit `RESET` confirmation.
