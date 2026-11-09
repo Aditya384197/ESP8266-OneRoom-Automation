@@ -1,4 +1,4 @@
-# v1.7.1 function audit — ESP8266 OneRoom Automation
+# v1.7.2 function audit — ESP8266 OneRoom Automation
 
 This is a source-level review and static validation record. It is not a substitute for compiling with the ESP8266 toolchain or testing a physical board and Firebase project.
 
@@ -49,3 +49,11 @@ This is a source-level review and static validation record. It is not a substitu
 - Firebase Authentication, deployed Realtime Database Rules, device account permissions, cloud command timing or remote reset on a live project.
 
 Do not mark these runtime checks as passed until the GitHub Actions build and hardware/Firebase tests are completed.
+
+
+## v1.7.2 OTA review
+- [x] Separate firmware and LittleFS upload types, strict filenames.
+- [x] Firmware uses U_FLASH; filesystem uses U_FS and FS partition size.
+- [x] Combined UI flow: firmware upload → reboot wait → LittleFS upload → reboot wait.
+- [x] Configuration snapshot and CRC validation in EEPROM; restore before configuration load.
+- [ ] PlatformIO compile and live ESP8266 OTA test still required.

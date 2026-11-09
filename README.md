@@ -1,4 +1,4 @@
-# ESP8266 OneRoom Automation — v1.7.1
+# ESP8266 OneRoom Automation — v1.7.2
 
 A local-first four-relay controller for NodeMCU ESP8266. The local web dashboard, physical switch, countdown timers and weekly schedules work without Firebase or internet. Firebase is an optional remote-control channel; it never replaces local control.
 
@@ -92,7 +92,7 @@ The PlatformIO environment targets NodeMCU v2, 4 MB flash, LittleFS and `eagle.f
 
 Use both files from the same successful workflow run. Flashing `littlefs.bin` overwrites the filesystem and may erase saved Wi-Fi, OTA and Firebase configuration. Back up settings before flashing where possible.
 
-## v1.7.1 changes
+## v1.7.2 changes
 
 - Moved the maintained physical switch to D7/GPIO13 and removed the physical factory-reset input. Dashboard factory reset and Admin-only Firebase remote reset are supported.
 - Enforced physical-switch priority in the main automation loop, manual API, timers, weekly schedules and Firebase commands.
@@ -100,3 +100,11 @@ Use both files from the same successful workflow run. Flashing `littlefs.bin` ov
 - Added Firebase Authentication device-account sign-in, verified TLS REST access, refresh-token rotation, RTDB command polling/acknowledgement and actual-state heartbeat reporting.
 - Added a fixed-Admin-UID RTDB rules template, Admin-only remote factory-reset command, and `FIREBASE_SETUP.md` provisioning instructions for the later Android app's pending/approved/rejected/revoked flow.
 - Fixed dashboard optimistic rendering so it does not momentarily change Wi-Fi status or overwrite relay names.
+
+
+## OTA update (v1.7.2)
+
+Open Settings → OTA firmware update. Choose `firmware.bin` and `littlefs.bin` from the **same** GitHub Actions build and enter the OTA password. Press Install once. The browser uploads firmware first, waits for the ESP8266 to restart, then uploads LittleFS and waits for the final restart. The device backs up and restores saved Wi-Fi, relay, automation, OTA and Firebase configuration across the filesystem replacement. Keep stable power connected until the page reports completion.
+
+
+**First v1.7.2 installation:** flash both `firmware.bin` and `littlefs.bin` once using USB/serial. The combined OTA screen is included in the v1.7.2 LittleFS image. Subsequent releases can be installed together from the dashboard with one button press.

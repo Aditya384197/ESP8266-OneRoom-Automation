@@ -124,10 +124,11 @@
 
     <section class="settings-panel" data-panel="otaupdate">
       <div class="panel-top"><div class="panel-title"><small>MAINTENANCE</small><h1>OTA firmware update</h1></div></div>
-      <div class="panel-card"><h2>Install new firmware</h2><p class="help">Select firmware.bin built for this exact ESP8266 board. Do not upload littlefs.bin in this form.</p>
+      <div class="panel-card"><h2>Install firmware and dashboard</h2><p class="help">Select the two .bin files from the same GitHub Actions build. The device installs firmware first, restarts, then installs LittleFS automatically. Saved Wi-Fi, relay, timer, schedule, OTA and Firebase settings are backed up and restored.</p>
         <label class="field">OTA password<input id="otaUploadPassword" type="password" maxlength="64" autocomplete="current-password"></label>
-        <label class="field">Firmware file<input id="firmware" type="file" accept=".bin,application/octet-stream"></label>
-        <div class="settings-button-row"><button id="otaUploadBtn" class="action-button" type="button">Upload firmware</button></div>
+        <label class="field">Firmware file (firmware.bin)<input id="firmwareFile" type="file" accept=".bin,application/octet-stream"></label>
+        <label class="field">Dashboard / filesystem (littlefs.bin)<input id="filesystemFile" type="file" accept=".bin,application/octet-stream"></label>
+        <div class="settings-button-row"><button id="otaUploadBtn" class="action-button" type="button">Install selected update files</button></div>
         <progress id="otaProgress" max="100" value="0" hidden></progress><p id="otaStatus" class="message" role="status"></p>
       </div>
     </section>
@@ -336,20 +337,73 @@ $('otaPassBtn').addEventListener('click', async () => {
     $('oldOta').value = ''; $('newOta').value = ''; $('confirmOta').value = '';
   } catch (error) { message('otaPassMessage', error.message, false); }
 });
-$('otaUploadBtn').addEventListener('click', () => {
-  const file = $('firmware').files[0], password = $('otaUploadPassword').value;
-  if (!file || !password) { message('otaStatus', 'Select firmware.bin and enter the OTA password.', false); return; }
-  const progress = $('otaProgress'); progress.hidden = false; progress.value = 0; message('otaStatus', 'Uploading firmware…');
-  const request = new XMLHttpRequest();
-  request.open('POST', `/api/ota/upload?password=${encodeURIComponent(password)}`);
-  request.upload.onprogress = (event) => { if (event.lengthComputable) progress.value = event.loaded / event.total * 100; };
-  request.onload = () => {
-    let data = {}; try { data = JSON.parse(request.responseText); } catch (_) {}
-    if (request.status >= 200 && request.status < 300) { progress.value = 100; message('otaStatus', data.message || 'Firmware accepted. Device is rebooting…'); }
-    else message('otaStatus', data.error || 'OTA update rejected.', false);
-  };
-  request.onerror = () => message('otaStatus', 'Network error during OTA upload.', false);
-  const payload = new FormData(); payload.append('firmware', file, file.name); request.send(payload);
+function uploadOtaFile(file, type, password, progressStart, progressSpan) {
+  return new Promise((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    request.open('POST', `/api/ota/upload?type=${type}&password=${encodeURIComponent(password)}`);
+    request.upload.onprogress = (event) => {
+      if (event.lengthComputable) $('otaProgress').value = progressStart + (event.loaded / event.total) * progressSpan;
+    };
+    request.onload = () => {
+      let data = {}; try { data = JSON.parse(request.responseText); } catch (_) {}
+      if (request.status >= 200 && request.status < 300) resolve(data);
+      else reject(new Error(data.error || `${type} OTA rejected (${request.status})`));
+    };
+    request.onerror = () => reject(new Error('Network error during OTA upload.'));
+    request.onabort = () => reject(new Error('OTA upload was cancelled.'));
+    const payload = new FormData(); payload.append('firmware', file, file.name); request.send(payload);
+  });
+}
+async function waitForDevice(previousStatus, timeoutMs = 90000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      const status = await api('/api/state');
+      const versionChanged = status.version !== previousStatus.version;
+      const bootChanged = status.bootId !== previousStatus.bootId;
+      const uptimeReset = Number(status.uptimeSec) < Number(previousStatus.uptimeSec);
+      if (bootChanged || versionChanged || uptimeReset) return status;
+    } catch (_) {}
+    await new Promise(resolve => setTimeout(resolve, 300));
+  }
+  throw new Error('Device did not return after restart. Reconnect to its Wi-Fi and check its status before retrying.');
+}
+$('otaUploadBtn').addEventListener('click', async () => {
+  const firmware = $('firmwareFile').files[0];
+  const filesystem = $('filesystemFile').files[0];
+  const password = $('otaUploadPassword').value;
+  if ((!firmware && !filesystem) || !password) { message('otaStatus', 'Select at least one .bin file and enter the OTA password.', false); return; }
+  if (firmware && firmware.name.toLowerCase() !== 'firmware.bin') { message('otaStatus', 'Choose the file named firmware.bin.', false); return; }
+  if (filesystem && filesystem.name.toLowerCase() !== 'littlefs.bin') { message('otaStatus', 'Choose the file named littlefs.bin.', false); return; }
+  const total = (firmware ? firmware.size : 0) + (filesystem ? filesystem.size : 0);
+  const firmwareSpan = firmware && filesystem ? (firmware.size / total) * 100 : 100;
+  const filesystemSpan = firmware && filesystem ? 100 - firmwareSpan : 100;
+  const progress = $('otaProgress'); progress.hidden = false; progress.value = 0;
+  $('otaUploadBtn').disabled = true;
+  try {
+    if (firmware) {
+      const beforeFirmware = await api('/api/state');
+      message('otaStatus', 'Step 1/2: uploading firmware.bin…');
+      await uploadOtaFile(firmware, 'firmware', password, 0, firmwareSpan);
+      message('otaStatus', 'Firmware accepted. Waiting for the ESP8266 to restart…');
+      await waitForDevice(beforeFirmware);
+      progress.value = firmwareSpan;
+    }
+    if (filesystem) {
+      const beforeFilesystem = await api('/api/state');
+      message('otaStatus', firmware ? 'Step 2/2: uploading littlefs.bin…' : 'Uploading littlefs.bin…');
+      await uploadOtaFile(filesystem, 'filesystem', password, firmware ? firmwareSpan : 0, filesystemSpan);
+      message('otaStatus', 'LittleFS accepted. Restoring saved settings after restart…');
+      await waitForDevice(beforeFilesystem);
+      progress.value = 100;
+    }
+    const installed = [firmware ? 'firmware' : '', filesystem ? 'dashboard/filesystem' : ''].filter(Boolean).join(' + ');
+    message('otaStatus', `Update completed successfully: ${installed} installed.`);
+  } catch (error) {
+    message('otaStatus', error.message, false);
+  } finally {
+    $('otaUploadBtn').disabled = false;
+  }
 });
 
 function duration(seconds) {

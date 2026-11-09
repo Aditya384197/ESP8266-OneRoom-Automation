@@ -85,6 +85,8 @@ public:
   bool loadFirebase();
   bool saveFirebase();
   bool clearFirebase();
+  bool backupForFilesystemUpdate();
+  bool restoreFilesystemBackup();
 
   DeviceConfig& config() { return _config; }
   RelayState& state() { return _state; }

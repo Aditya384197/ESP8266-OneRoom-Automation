@@ -1,4 +1,4 @@
-# Firebase setup — ESP8266 OneRoom Automation v1.7.1
+# Firebase setup — ESP8266 OneRoom Automation v1.7.2
 
 This firmware uses Firebase Authentication (Email/Password) for a dedicated ESP8266 device account and Firebase Realtime Database (REST API) for remote commands and actual-state reporting. The ESP8266 does not create, approve, reject or revoke people. Those administrator functions are reserved for the later Android app and are enforced by the database rules.
 

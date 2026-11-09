@@ -1,4 +1,4 @@
-# Upgrade notes — v1.7.1
+# Upgrade notes — v1.7.2
 
 This ZIP is a complete source tree based on the latest source archive supplied for this task, not a patch-only ZIP. It includes the PlatformIO project and GitHub Actions workflow.
 
@@ -35,3 +35,16 @@ For this NodeMCU v2 4 MB layout, flash firmware at `0x00000` and LittleFS at `0x
 ## Known engineering limit
 
 ESP8266 `HTTPClient` HTTPS calls are synchronous even though the local web server is asynchronous. Firebase network operations are bounded and polled at low frequency with retry backoff, but an active HTTPS call can temporarily delay other cooperative loop work. Use this firmware for normal home automation, not as a safety-certified controller or emergency disconnect.
+
+
+## v1.7.2 OTA update improvements
+
+- Settings now accepts both `firmware.bin` and `littlefs.bin` in one operation.
+- When both are selected, firmware is uploaded first; the browser waits for the new firmware to restart and return, then uploads LittleFS.
+- Before a LittleFS image is written, the ESP8266 snapshots the Wi-Fi, device/OTA, relay-state, automation and Firebase records into the dedicated 4 KiB EEPROM flash sector. On boot, it restores those records before normal configuration loading.
+- Uploads are type-checked by filename and use the ESP8266 core updater commands `U_FLASH` and `U_FS`.
+- Keep the device on stable power throughout the filesystem update. Do not disconnect power while LittleFS is being written.
+
+
+### First installation note
+The v1.7.2 dashboard is what provides the combined two-file OTA workflow. Install v1.7.2 firmware and LittleFS images together once using the normal USB/serial flashing method. After that, future updates can be selected together in Settings and installed with one button press. The two images are deliberately sent in sequence with a reboot between them because the new firmware must be running before the filesystem upload can be processed.

@@ -1,4 +1,4 @@
-ESP8266 OneRoom Automation v1.7.1
+ESP8266 OneRoom Automation v1.7.2
 
 Source: based on the latest user-supplied GitHub source archive (commit fa1c126b43ec7c045748f3691be74cf94c1a78dd), with requested GPIO and reset changes.
 Board: NodeMCU v2 / ESP8266, 4 MB flash, 1 MB LittleFS layout.
@@ -14,7 +14,7 @@ Implemented in source:
 - Verified TLS REST calls, RTDB desired-state commands, acknowledgements and actual-state heartbeat.
 - Fixed Admin UID Realtime Database rules template and Firebase setup guide included.
 
-Additional v1.7.1 changes:
+Additional v1.7.2 changes:
 - Automation storage migrates v4 to v5 and remaps a prior D0/GPIO16 switch assignment to D7/GPIO13 while preserving relay names, polarity, timers and schedules.
 - The dashboard reset API and Firebase Admin-only reset command erase configuration, then re-apply relay OFF levels using factory-default polarity before restart.
 
@@ -36,3 +36,12 @@ Important setup notes:
 - Firebase HTTP/TLS on ESP8266 is synchronous and can temporarily delay cooperative loop work.
 
 Flash layout: firmware.bin at 0x00000; littlefs.bin at 0x300000.
+
+
+v1.7.2 OTA additions:
+- Web OTA supports firmware.bin (U_FLASH) and littlefs.bin (U_FS).
+- Combined update uploads firmware first, waits for the device to return, then uploads LittleFS.
+- LittleFS settings backup/restore uses the dedicated ESP8266 EEPROM sector; config records are CRC-validated.
+- This source has not yet been confirmed by a PlatformIO compile or physical OTA test.
+
+First-install note: flash v1.7.2 firmware.bin and littlefs.bin together once by USB/serial to install the new OTA screen. Later updates can be performed from the dashboard in one guided operation.

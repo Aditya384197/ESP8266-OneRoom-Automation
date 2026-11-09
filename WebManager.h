@@ -37,6 +37,7 @@ private:
   bool _otaInProgress = false;
   bool _otaRejected = false;
   bool _otaReady = false;
+  bool _otaFilesystem = false;
   AsyncWebServerRequest* _otaOwner = nullptr;
   unsigned long _restartAt = 0;
 

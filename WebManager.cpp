@@ -1,6 +1,7 @@
 #include "WebManager.h"
 
 #include <LittleFS.h>
+#include <flash_utils.h>
 #include <MD5Builder.h>
 #include <ESP8266WiFi.h>
 #include <time.h>
@@ -10,6 +11,7 @@
 #include "ProjectVersion.h"
 
 static constexpr size_t MAX_JSON_BODY = 4096U;
+static uint32_t gBootId = 0;
 struct JsonBodyBuffer {
   size_t total;
   size_t received;
@@ -32,6 +34,10 @@ void WebManager::begin(ConfigManager& cfg, RelayManager& relays,
   _wifi = &wifi;
   _automation = &automation;
   _firebase = &firebase;
+  // A per-boot marker lets the OTA page reliably detect restarts without
+  // mistaking a brief Wi-Fi hiccup for a completed firmware update.
+  gBootId = ESP.getCycleCount() ^ micros() ^ ESP.getChipId();
+  if (gBootId == 0) gBootId = 1;
   setupRoutes();
   startCaptiveDNS();
   _server.begin();
@@ -216,6 +222,7 @@ void WebManager::handleCaptivePortal(AsyncWebServerRequest* request) {
 void WebManager::handleState(AsyncWebServerRequest* request) {
   JsonDocument doc;
   doc["version"] = PROJECT_VERSION;
+  doc["bootId"] = gBootId;
   doc["wifiConnected"] = _wifi->staConnected();
   doc["ip"] = _wifi->ipString();
   doc["apIp"] = _wifi->apIpString();
@@ -559,28 +566,59 @@ void WebManager::handleOtaPassword(AsyncWebServerRequest* request, JsonDocument&
 
 void WebManager::handleOtaUpload(AsyncWebServerRequest* request, const String& filename,
                                  size_t index, uint8_t* data, size_t len, bool final) {
-  (void)filename;
   if (index == 0) {
     // A second client must not reset or poison the active client upload state.
     if (_otaInProgress && _otaOwner != request) return;
     _otaOwner = request;
     _otaInProgress = false; _otaRejected = false; _otaReady = false;
+    _otaFilesystem = request->hasParam("type") && request->getParam("type")->value() == "filesystem";
     const String supplied = request->hasParam("password") ? request->getParam("password")->value() : String();
     if (!validOtaPassword(supplied)) { _otaRejected = true; return; }
-    const size_t freeSketchSpace = ESP.getFreeSketchSpace();
-    if (freeSketchSpace <= 0x1000U) { _otaRejected = true; return; }
-    const size_t maxSketchSpace = (freeSketchSpace - 0x1000U) & 0xFFFFF000U;
-    if (maxSketchSpace == 0 || !Update.begin(maxSketchSpace)) { _otaRejected = true; return; }
+
+    String uploadName = filename;
+    uploadName.toLowerCase();
+    if ((!_otaFilesystem && uploadName != "firmware.bin") ||
+        (_otaFilesystem && uploadName != "littlefs.bin")) {
+      _otaRejected = true;
+      return;
+    }
+
+    if (_otaFilesystem) {
+      // Preserve Wi-Fi, relay, automation, OTA and Firebase settings before
+      // replacing LittleFS. EEPROM is a separate flash sector after LittleFS.
+      if (!_cfg->backupForFilesystemUpdate()) { _otaRejected = true; return; }
+      LittleFS.end();
+      const size_t filesystemSize = (size_t)FS_end - (size_t)FS_start;
+      if (filesystemSize == 0 || !Update.begin(filesystemSize, U_FS)) {
+        _otaRejected = true;
+        // The backup marker is intentionally retained; reboot restores it.
+        scheduleRestart(1200);
+        return;
+      }
+    } else {
+      const size_t freeSketchSpace = ESP.getFreeSketchSpace();
+      if (freeSketchSpace <= 0x1000U) { _otaRejected = true; return; }
+      const size_t maxSketchSpace = (freeSketchSpace - 0x1000U) & 0xFFFFF000U;
+      if (maxSketchSpace == 0 || !Update.begin(maxSketchSpace, U_FLASH)) { _otaRejected = true; return; }
+    }
     _otaInProgress = true;
   }
   if (_otaOwner != request || _otaRejected) return;
   if (len && _otaInProgress) {
     const size_t written = Update.write(data, len);
-    if (written != len) { _otaRejected = true; _otaInProgress = false; Update.end(false); return; }
+    if (written != len) {
+      _otaRejected = true; _otaInProgress = false; Update.end(false);
+      if (_otaFilesystem) scheduleRestart(1200);
+      return;
+    }
   }
   if (final) {
     if (_otaInProgress && !_otaRejected && Update.end(true)) _otaReady = true;
-    else { _otaRejected = true; if (_otaInProgress) Update.end(false); }
+    else {
+      _otaRejected = true;
+      if (_otaInProgress) Update.end(false);
+      if (_otaFilesystem) scheduleRestart(1200);
+    }
     _otaInProgress = false;
   }
 }
@@ -588,11 +626,18 @@ void WebManager::handleOtaUpload(AsyncWebServerRequest* request, const String& f
 void WebManager::handleOtaUploadDone(AsyncWebServerRequest* request) {
   if (_otaOwner != request || !_otaReady || _otaRejected) {
     if (_otaOwner == request) { _otaOwner = nullptr; _otaInProgress = false; _otaReady = false; }
-    request->send(403, "application/json; charset=utf-8", "{\"error\":\"OTA update was rejected\"}");
+    request->send(403, "application/json; charset=utf-8", "{\"error\":\"OTA update was rejected. Check file type, password and build target.\"}");
     return;
   }
+  const bool filesystemUpdate = _otaFilesystem;
   _otaOwner = nullptr; _otaReady = false;
-  request->send(200, "application/json; charset=utf-8", "{\"message\":\"Firmware uploaded successfully. Restarting.\"}");
+  const char* message = filesystemUpdate
+    ? "LittleFS uploaded successfully. Saved device settings will be restored after restart."
+    : "Firmware uploaded successfully. Restarting before the next update step.";
+  JsonDocument doc;
+  doc["message"] = message;
+  String payload; serializeJson(doc, payload);
+  request->send(200, "application/json; charset=utf-8", payload);
   scheduleRestart(1200);
 }
 

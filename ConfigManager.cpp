@@ -1,5 +1,7 @@
 #include "ConfigManager.h"
 #include <LittleFS.h>
+#include <EEPROM.h>
+#include <stddef.h>
 
 static constexpr uint32_t CONFIG_MAGIC = 0x4F524143UL; // ORAC
 static constexpr uint32_t STATE_MAGIC  = 0x4F524153UL; // ORAS
@@ -15,6 +17,23 @@ static const char* DEFAULT_DEVICE   = "RoomAutomation";
 // MD5 of the publicly documented v1.3.0 default OTA password. Clear this
 // legacy credential on upgrade so the owner must provision a private one.
 static const char* LEGACY_PUBLIC_OTA_MD5 = "59cc37a188dd68a20d35d664eb644fc7";
+
+// EEPROM occupies the dedicated 4 KiB flash sector immediately after LittleFS.
+// It safely holds the small persistent settings snapshot while the LittleFS
+// partition is replaced by an OTA filesystem image.
+static constexpr uint32_t FS_BACKUP_MAGIC = 0x4F544142UL; // OTAB
+static constexpr uint16_t FS_BACKUP_VERSION = 1;
+struct FilesystemOtaBackup {
+  uint32_t magic;
+  uint16_t version;
+  uint16_t reserved;
+  DeviceConfig config;
+  RelayState state;
+  AutomationConfig automation;
+  FirebaseConfig firebase;
+  uint32_t checksum;
+};
+static_assert(sizeof(FilesystemOtaBackup) <= 4096, "Filesystem OTA backup must fit in ESP8266 EEPROM sector");
 
 bool ConfigManager::begin() {
   return LittleFS.begin();
@@ -326,6 +345,68 @@ bool ConfigManager::clearFirebase() {
   if (saveFirebase()) return true;
   _firebase = previous;
   return false;
+}
+
+bool ConfigManager::backupForFilesystemUpdate() {
+  FilesystemOtaBackup backup{};
+  backup.magic = FS_BACKUP_MAGIC;
+  backup.version = FS_BACKUP_VERSION;
+  backup.config = _config;
+  backup.state = _state;
+  backup.automation = _automation;
+  backup.firebase = _firebase;
+  backup.checksum = 0;
+  backup.checksum = crc32(reinterpret_cast<const uint8_t*>(&backup), offsetof(FilesystemOtaBackup, checksum));
+
+  EEPROM.begin(4096);
+  EEPROM.put(0, backup);
+  const bool committed = EEPROM.commit();
+  EEPROM.end();
+  if (!committed) return false;
+
+  // Read back and verify before allowing the filesystem partition to be erased.
+  EEPROM.begin(4096);
+  FilesystemOtaBackup verify{};
+  EEPROM.get(0, verify);
+  EEPROM.end();
+  const uint32_t stored = verify.checksum;
+  verify.checksum = 0;
+  return verify.magic == FS_BACKUP_MAGIC && verify.version == FS_BACKUP_VERSION &&
+         stored == crc32(reinterpret_cast<const uint8_t*>(&verify), offsetof(FilesystemOtaBackup, checksum)) &&
+         validateConfig(verify.config) && validateState(verify.state) &&
+         validateAutomation(verify.automation) && validateFirebase(verify.firebase);
+}
+
+bool ConfigManager::restoreFilesystemBackup() {
+  EEPROM.begin(4096);
+  FilesystemOtaBackup backup{};
+  EEPROM.get(0, backup);
+  EEPROM.end();
+
+  if (backup.magic != FS_BACKUP_MAGIC || backup.version != FS_BACKUP_VERSION) return true;
+  const uint32_t stored = backup.checksum;
+  backup.checksum = 0;
+  const uint32_t calculated = crc32(reinterpret_cast<const uint8_t*>(&backup), offsetof(FilesystemOtaBackup, checksum));
+  if (stored != calculated || !validateConfig(backup.config) || !validateState(backup.state) ||
+      !validateAutomation(backup.automation) || !validateFirebase(backup.firebase)) return false;
+
+  if (!saveBinary("/config.bin", "/config.bak", &backup.config, sizeof(backup.config)) ||
+      !saveBinary("/state.bin", "/state.bak", &backup.state, sizeof(backup.state)) ||
+      !saveBinary("/automation.bin", "/automation.bak", &backup.automation, sizeof(backup.automation)) ||
+      !saveBinary("/firebase.bin", "/firebase.bak", &backup.firebase, sizeof(backup.firebase))) return false;
+
+  _config = backup.config;
+  _state = backup.state;
+  _automation = backup.automation;
+  _firebase = backup.firebase;
+
+  // Clear the marker only after all four files have been restored successfully.
+  EEPROM.begin(4096);
+  const uint32_t cleared = 0;
+  EEPROM.put(0, cleared);
+  const bool committed = EEPROM.commit();
+  EEPROM.end();
+  return committed;
 }
 
 bool ConfigManager::loadBinary(const char* path, const char* backup, void* data, size_t size) {

@@ -63,6 +63,12 @@ void setup() {
     }
   }
 
+  // Restore settings saved in the EEPROM sector if the previous operation was
+  // a LittleFS OTA update. This runs before loading any configuration records.
+  if (!configManager.restoreFilesystemBackup()) {
+    Serial.println(F("WARNING: LittleFS OTA settings backup failed validation; defaults/recovery may be required."));
+  }
+
   if (!configManager.load()) Serial.println(F("Config load failed; defaults may be in use."));
   if (!configManager.loadState()) Serial.println(F("Relay state load failed; defaults may be in use."));
   if (!configManager.loadAutomation()) Serial.println(F("Automation load failed; defaults may be in use."));
